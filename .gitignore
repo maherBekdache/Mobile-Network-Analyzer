@@ -1,0 +1,23 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Backend runtime data
+backend/data/
+backend/.env
+
+# Android
+android/.gradle/
+android/local.properties
+android/app/build/
+android/build/
+
+# Build outputs
+dist/
+build/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
