@@ -63,6 +63,10 @@ Modern Android restricts MAC address access for privacy. This project records st
 
 Cellular API availability varies by phone, Android version, SIM, operator, and permissions. Demo mode generates realistic Alfa/Touch and generation samples when physical cellular measurements are unavailable.
 
+SNR/SINR can be missing because Android does not expose it consistently for every radio generation, chipset, SIM/operator state, or serving cell. The app and dashboard show missing SNR/SINR as a device/network reporting limitation, not as a failed upload.
+
+Signal power is measured in dBm, where values closer to 0 are stronger. The UI translates raw dBm into tiers: Excellent, Good, Medium, Bad, Very Bad.
+
 ## Main API Endpoints
 
 - `POST /api/measurements`

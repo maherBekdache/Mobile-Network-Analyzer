@@ -6,6 +6,8 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.location.Location;
 import android.location.LocationManager;
 import android.net.wifi.WifiManager;
@@ -76,6 +78,7 @@ public class MainActivity extends Activity {
     private EditText serverInput;
     private CheckBox demoMode;
     private TextView statusText;
+    private TextView qualityText;
     private TextView liveText;
     private TextView statsText;
     private TextView recentText;
@@ -112,16 +115,16 @@ public class MainActivity extends Activity {
     private View buildUi() {
         int pad = dp(16);
         ScrollView scrollView = new ScrollView(this);
-        scrollView.setBackgroundColor(Color.rgb(237, 244, 247));
+        scrollView.setBackgroundColor(Color.rgb(232, 243, 247));
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(pad, pad, pad, pad);
         scrollView.addView(root);
 
-        TextView title = text("Mobile Network Analyzer", 28, true);
-        TextView subtitle = text("Streams cellular measurements to the separate Node.js server every 10 seconds.", 15, false);
-        subtitle.setTextColor(Color.rgb(82, 97, 112));
+        TextView title = heroText("Mobile Network Analyzer");
+        TextView subtitle = text("Live cellular capture, Alfa/Touch comparisons, quality tiers, and server streaming every 10 seconds.", 15, false);
+        subtitle.setTextColor(Color.rgb(234, 248, 250));
         root.addView(title);
         root.addView(subtitle);
 
@@ -151,10 +154,12 @@ public class MainActivity extends Activity {
         controls.addView(recentButton);
         root.addView(controls);
 
-        statusText = card("Status");
-        liveText = card("Live Measurement");
-        statsText = card("Server Statistics");
-        recentText = card("Recent Server Rows");
+        qualityText = card("Signal Quality", Color.rgb(220, 252, 231));
+        statusText = card("Status", Color.WHITE);
+        liveText = card("Live Measurement", Color.WHITE);
+        statsText = card("Server Statistics", Color.WHITE);
+        recentText = card("Recent Server Rows", Color.WHITE);
+        root.addView(qualityText);
         root.addView(statusText);
         root.addView(liveText);
         root.addView(statsText);
@@ -174,7 +179,15 @@ public class MainActivity extends Activity {
         view.setTextSize(sp);
         view.setTextColor(Color.rgb(19, 32, 43));
         view.setPadding(0, dp(5), 0, dp(5));
-        if (bold) view.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        if (bold) view.setTypeface(Typeface.DEFAULT_BOLD);
+        return view;
+    }
+
+    private TextView heroText(String value) {
+        TextView view = text(value, 30, true);
+        view.setTextColor(Color.WHITE);
+        view.setPadding(dp(16), dp(18), dp(16), dp(6));
+        view.setBackground(rounded(Color.rgb(15, 118, 110), dp(8)));
         return view;
     }
 
@@ -189,14 +202,14 @@ public class MainActivity extends Activity {
         button.setText(value);
         button.setAllCaps(false);
         button.setTextColor(Color.WHITE);
-        button.setBackgroundColor(Color.rgb(15, 118, 110));
+        button.setBackground(rounded(Color.rgb(15, 118, 110), dp(8)));
         button.setMinHeight(dp(46));
         return button;
     }
 
-    private TextView card(String title) {
+    private TextView card(String title, int background) {
         TextView view = text(title + "\nWaiting for data.", 15, false);
-        view.setBackgroundColor(Color.WHITE);
+        view.setBackground(rounded(background, dp(8)));
         view.setPadding(dp(14), dp(12), dp(14), dp(12));
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -206,6 +219,14 @@ public class MainActivity extends Activity {
         view.setLayoutParams(params);
         view.setGravity(Gravity.START);
         return view;
+    }
+
+    private GradientDrawable rounded(int color, int radius) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(color);
+        drawable.setCornerRadius(radius);
+        drawable.setStroke(dp(1), Color.rgb(198, 215, 224));
+        return drawable;
     }
 
     private void toggleStreaming() {
@@ -249,7 +270,9 @@ public class MainActivity extends Activity {
                 builder.append("Samples: ").append(stats.optInt("totalSamples")).append("\n");
                 JSONObject overall = stats.optJSONObject("overall");
                 if (overall != null) {
-                    builder.append("Average power: ").append(overall.optString("averagePowerDbm", "N/A")).append(" dBm\n");
+                    double avgPower = overall.optDouble("averagePowerDbm", Double.NaN);
+                    builder.append("Average power: ").append(overall.optString("averagePowerDbm", "N/A"))
+                            .append(" dBm (").append(signalTier(avgPower)).append(")\n");
                     builder.append("Average SNR: ").append(overall.optString("averageSnrDb", "N/A")).append(" dB\n");
                     builder.append("Distinct devices: ").append(overall.optInt("distinctDevices")).append("\n");
                     builder.append("Distinct cells: ").append(overall.optInt("distinctCells")).append("\n");
@@ -275,7 +298,8 @@ public class MainActivity extends Activity {
                             .append(row.optString("device_id")).append(" | ")
                             .append(row.optString("operator")).append(" | ")
                             .append(row.optString("network_generation")).append(" | ")
-                            .append(row.optString("signal_power_dbm")).append(" dBm | Cell ")
+                            .append(row.optString("signal_power_dbm")).append(" dBm ")
+                            .append(signalTier(row.optDouble("signal_power_dbm", Double.NaN))).append(" | Cell ")
                             .append(row.optString("cell_id", "N/A")).append("\n");
                 }
                 setText(recentText, builder.toString());
@@ -469,6 +493,16 @@ public class MainActivity extends Activity {
     }
 
     private void renderLive(Measurement m) {
+        String tier = signalTier(m.signalPowerDbm == null ? Double.NaN : m.signalPowerDbm);
+        String noise = m.snrDb != null ? m.snrDb + " dB SNR" : (m.sinrDb != null ? m.sinrDb + " dB SINR" : "Not reported by this device/network");
+        String quality = "Signal Quality\n"
+                + tier + "  " + qualityBar(m.signalPowerDbm) + "\n"
+                + "Power: " + nullText(m.signalPowerDbm) + " dBm. Closer to 0 is stronger, so -75 is better than -105.\n"
+                + "Noise: " + noise + "\n"
+                + "SNR/SINR is often missing on 2G/3G or when Android/modem/operator do not expose it.";
+        setText(qualityText, quality);
+        qualityText.setBackground(rounded(signalTierColor(tier), dp(8)));
+
         StringBuilder builder = new StringBuilder("Live Measurement\n");
         builder.append("Device: ").append(m.deviceId).append("\n");
         builder.append("Session: ").append(m.sessionId.substring(0, 8)).append("\n");
@@ -482,6 +516,39 @@ public class MainActivity extends Activity {
         builder.append("Timestamp: ").append(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(m.timestamp)).append("\n");
         if (m.error != null) builder.append("Note: ").append(m.error).append("\n");
         setText(liveText, builder.toString());
+    }
+
+    private String signalTier(double powerDbm) {
+        if (Double.isNaN(powerDbm)) return "Unknown";
+        if (powerDbm >= -80) return "Excellent";
+        if (powerDbm >= -90) return "Good";
+        if (powerDbm >= -100) return "Medium";
+        if (powerDbm >= -110) return "Bad";
+        return "Very Bad";
+    }
+
+    private int signalTierColor(String tier) {
+        switch (tier) {
+            case "Excellent": return Color.rgb(220, 252, 231);
+            case "Good": return Color.rgb(216, 245, 239);
+            case "Medium": return Color.rgb(254, 243, 199);
+            case "Bad": return Color.rgb(255, 237, 213);
+            case "Very Bad": return Color.rgb(254, 226, 226);
+            default: return Color.rgb(238, 242, 244);
+        }
+    }
+
+    private String qualityBar(Integer powerDbm) {
+        if (powerDbm == null) return "[----------]";
+        int filled;
+        if (powerDbm >= -80) filled = 10;
+        else if (powerDbm >= -90) filled = 8;
+        else if (powerDbm >= -100) filled = 6;
+        else if (powerDbm >= -110) filled = 3;
+        else filled = 1;
+        StringBuilder builder = new StringBuilder("[");
+        for (int i = 0; i < 10; i++) builder.append(i < filled ? "#" : "-");
+        return builder.append("]").toString();
     }
 
     private void updateStatus(String message) {

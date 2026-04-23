@@ -75,6 +75,22 @@ async function groupedAverage(db, column, metric, where, params) {
   );
 }
 
+async function operatorQuality(db, where, params) {
+  return db.all(
+    `SELECT
+       operator AS label,
+       COUNT(*) AS samples,
+       ROUND(AVG(signal_power_dbm), 2) AS averagePowerDbm,
+       ROUND(AVG(COALESCE(snr_db, sinr_db)), 2) AS averageNoiseDb,
+       COUNT(COALESCE(snr_db, sinr_db)) AS noiseSamples
+     FROM measurements
+     ${where} ${where ? "AND" : "WHERE"} operator IN ('alfa', 'touch')
+     GROUP BY operator
+     ORDER BY operator ASC`,
+    params
+  );
+}
+
 export async function getSummaryStats(db, query = {}) {
   const { where, params } = buildMeasurementWhere(query);
   const totalRow = await db.get(`SELECT COUNT(*) AS total FROM measurements ${where}`, params);
@@ -90,6 +106,7 @@ export async function getSummaryStats(db, query = {}) {
   const snrByGeneration = await groupedAverage(db, "network_generation", "snr_db", where, params);
   const sinrByGeneration = await groupedAverage(db, "network_generation", "sinr_db", where, params);
   const powerByDevice = await groupedAverage(db, "device_id", "signal_power_dbm", where, params);
+  const operatorQualityRows = await operatorQuality(db, where, params);
   const overall = await db.get(
     `SELECT
        ROUND(AVG(signal_power_dbm), 2) AS averagePowerDbm,
@@ -119,6 +136,7 @@ export async function getSummaryStats(db, query = {}) {
     snrByGeneration,
     sinrByGeneration,
     powerByDevice,
+    operatorQuality: operatorQualityRows,
     overall: overall ?? {
       averagePowerDbm: null,
       averageSnrDb: null,

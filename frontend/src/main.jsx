@@ -8,8 +8,10 @@ import {
   Clock3,
   Database,
   Filter,
+  Info,
   Radio,
   RefreshCw,
+  SignalHigh,
   Smartphone,
   Wifi
 } from "lucide-react";
@@ -33,6 +35,14 @@ import "./styles.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8080";
 const COLORS = ["#14b8a6", "#f97316", "#6366f1", "#eab308", "#ef4444"];
+
+const POWER_TIERS = [
+  { min: -80, label: "Excellent", className: "excellent", hint: "Very strong signal" },
+  { min: -90, label: "Good", className: "good", hint: "Reliable signal" },
+  { min: -100, label: "Medium", className: "medium", hint: "Usable but weaker" },
+  { min: -110, label: "Bad", className: "bad", hint: "Weak signal" },
+  { min: -Infinity, label: "Very Bad", className: "very-bad", hint: "Likely unstable" }
+];
 
 function qs(filters) {
   const params = new URLSearchParams();
@@ -59,6 +69,29 @@ function metric(value, suffix = "") {
   return `${value}${suffix}`;
 }
 
+function powerTier(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return { label: "Unknown", className: "unknown", hint: "Not reported" };
+  }
+  return POWER_TIERS.find((tier) => Number(value) >= tier.min);
+}
+
+function noiseTier(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return { label: "Not Reported", className: "unknown", hint: "Device/network did not expose SNR/SINR" };
+  }
+  if (value >= 20) return { label: "Excellent", className: "excellent", hint: "Very clean link" };
+  if (value >= 13) return { label: "Good", className: "good", hint: "Clean link" };
+  if (value >= 5) return { label: "Medium", className: "medium", hint: "Moderate noise" };
+  if (value >= 0) return { label: "Bad", className: "bad", hint: "Noisy link" };
+  return { label: "Very Bad", className: "very-bad", hint: "High interference" };
+}
+
+function QualityBadge({ value, type = "power" }) {
+  const tier = type === "noise" ? noiseTier(value) : powerTier(value);
+  return <span className={`quality-badge ${tier.className}`}>{tier.label}</span>;
+}
+
 function StatCard({ icon: Icon, label, value, hint }) {
   return (
     <article className="stat-card">
@@ -72,9 +105,9 @@ function StatCard({ icon: Icon, label, value, hint }) {
   );
 }
 
-function ChartPanel({ title, icon: Icon, children }) {
+function ChartPanel({ title, icon: Icon, children, compact = false }) {
   return (
-    <section className="panel">
+    <section className={compact ? "panel compact-panel" : "panel"}>
       <header className="panel-title">
         <Icon size={18} />
         <h2>{title}</h2>
@@ -152,6 +185,17 @@ function App() {
     }));
   }, [summary]);
 
+  const operatorQualityData = useMemo(() => {
+    return (summary?.operatorQuality || []).map((row) => ({
+      operator: row.label,
+      averagePowerDbm: row.averagePowerDbm,
+      averageNoiseDb: row.averageNoiseDb,
+      samples: row.samples,
+      powerTier: powerTier(row.averagePowerDbm).label,
+      noiseTier: noiseTier(row.averageNoiseDb).label
+    }));
+  }, [summary]);
+
   const timeline = [...measurements]
     .reverse()
     .slice(-60)
@@ -164,6 +208,8 @@ function App() {
   const activeDevices = devices.filter((device) => device.is_active).length;
   const alfa = summary?.operatorRatios?.alfa?.percentage ?? 0;
   const touch = summary?.operatorRatios?.touch?.percentage ?? 0;
+  const latestPower = summary?.latest?.signal_power_dbm ?? summary?.overall?.averagePowerDbm;
+  const latestTier = powerTier(latestPower);
 
   return (
     <main>
@@ -175,6 +221,11 @@ function App() {
             Live Alfa/Touch coverage, radio generation ratios, signal quality trends, connected devices,
             and server-side statistics from every phone streaming samples.
           </p>
+          <div className="explain-strip">
+            <Info size={16} />
+            dBm is signal power: values closer to 0 are stronger. For example, -75 dBm is much better than -105 dBm.
+            SNR/SINR appears only when Android, the modem, and the current radio technology report it.
+          </div>
         </div>
         <div className="hero-status">
           <span className={status === "Live" ? "pulse" : "pulse offline"} />
@@ -222,6 +273,7 @@ function App() {
         <StatCard icon={Radio} label="Alfa / Touch" value={`${percent(alfa)} / ${percent(touch)}`} hint={`${summary?.alfaTouchRatio?.alfa ?? 0}:${summary?.alfaTouchRatio?.touch ?? 0} samples`} />
         <StatCard icon={Antenna} label="Avg Power" value={metric(summary?.overall?.averagePowerDbm, " dBm")} hint="Filtered average" />
         <StatCard icon={Wifi} label="Avg SNR" value={metric(summary?.overall?.averageSnrDb ?? summary?.overall?.averageSinrDb, " dB")} hint="When available" />
+        <StatCard icon={SignalHigh} label="Signal Tier" value={latestTier.label} hint={latestTier.hint} />
       </section>
 
       <section className="dashboard-grid">
@@ -235,6 +287,23 @@ function App() {
               <Line type="monotone" dataKey="power" stroke="#14b8a6" strokeWidth={3} dot={false} />
               <Line type="monotone" dataKey="snr" stroke="#f97316" strokeWidth={2} dot={false} />
             </LineChart>
+          </ResponsiveContainer>
+        </ChartPanel>
+
+        <ChartPanel title="Alfa vs Touch Signal Quality" icon={SignalHigh}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={operatorQualityData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#d9e2ea" />
+              <XAxis dataKey="operator" />
+              <YAxis />
+              <Tooltip formatter={(value, name, item) => {
+                const unit = name === "averagePowerDbm" ? " dBm" : " dB";
+                const tier = name === "averagePowerDbm" ? item.payload.powerTier : item.payload.noiseTier;
+                return [`${value ?? "N/A"}${unit} (${tier})`, name === "averagePowerDbm" ? "Avg power" : "Avg SNR/SINR"];
+              }} />
+              <Bar dataKey="averagePowerDbm" fill="#14b8a6" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="averageNoiseDb" fill="#f97316" radius={[6, 6, 0, 0]} />
+            </BarChart>
           </ResponsiveContainer>
         </ChartPanel>
 
@@ -261,7 +330,7 @@ function App() {
           </ResponsiveContainer>
         </ChartPanel>
 
-        <ChartPanel title="Average Power By Device" icon={Smartphone}>
+        <ChartPanel title="Average Power By User" icon={Smartphone} compact>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={deviceStats.slice(0, 12)}>
               <CartesianGrid strokeDasharray="3 3" stroke="#d9e2ea" />
@@ -288,8 +357,8 @@ function App() {
                   <td>{row.device_id}</td>
                   <td>{row.operator}</td>
                   <td><span className="badge">{row.network_generation}</span></td>
-                  <td>{metric(row.signal_power_dbm, " dBm")}</td>
-                  <td>{metric(row.snr_db ?? row.sinr_db, " dB")}</td>
+                  <td>{metric(row.signal_power_dbm, " dBm")} <QualityBadge value={row.signal_power_dbm} /></td>
+                  <td>{metric(row.snr_db ?? row.sinr_db, " dB")} <QualityBadge value={row.snr_db ?? row.sinr_db} type="noise" /></td>
                   <td>{row.cell_id || "N/A"}</td>
                 </tr>
               ))}
@@ -301,7 +370,7 @@ function App() {
           <header className="panel-title"><Smartphone size={18} /><h2>Devices</h2></header>
           <table>
             <thead>
-              <tr><th>Status</th><th>Device</th><th>Last IP</th><th>Samples</th><th>Avg Power</th></tr>
+              <tr><th>Status</th><th>Device</th><th>Last IP</th><th>Samples</th><th>Avg Power</th><th>Tier</th></tr>
             </thead>
             <tbody>
               {deviceStats.map((row) => (
@@ -311,6 +380,7 @@ function App() {
                   <td>{row.lastIp || "N/A"}</td>
                   <td>{row.totalSamples}</td>
                   <td>{metric(row.averagePowerDbm, " dBm")}</td>
+                  <td><QualityBadge value={row.averagePowerDbm} /></td>
                 </tr>
               ))}
             </tbody>

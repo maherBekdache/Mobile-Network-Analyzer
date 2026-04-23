@@ -55,6 +55,21 @@ h1 {
   font-size: 1.04rem;
 }
 
+.explain-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 900px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid #bfe3de;
+  border-radius: 8px;
+  background: #e4f8f4;
+  color: #0f514c;
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
 .hero-status {
   display: grid;
   gap: 3px;
@@ -118,7 +133,7 @@ button {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -198,6 +213,14 @@ button {
   margin-top: 14px;
 }
 
+.compact-panel {
+  min-height: 250px;
+}
+
+.compact-panel .chart-box {
+  height: 180px;
+}
+
 .tables {
   display: grid;
   grid-template-columns: 1.5fr 1fr;
@@ -232,7 +255,8 @@ th {
 }
 
 .badge,
-.status {
+.status,
+.quality-badge {
   display: inline-flex;
   align-items: center;
   min-height: 24px;
@@ -241,6 +265,48 @@ th {
   background: #eef2ff;
   color: #4338ca;
   font-weight: 800;
+}
+
+.quality-badge {
+  margin-left: 6px;
+  border: 1px solid transparent;
+  font-size: 0.75rem;
+}
+
+.quality-badge.excellent {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #86efac;
+}
+
+.quality-badge.good {
+  background: #d8f5ef;
+  color: #0f766e;
+  border-color: #5eead4;
+}
+
+.quality-badge.medium {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #facc15;
+}
+
+.quality-badge.bad {
+  background: #ffedd5;
+  color: #9a3412;
+  border-color: #fdba74;
+}
+
+.quality-badge.very-bad {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fca5a5;
+}
+
+.quality-badge.unknown {
+  background: #eef2f4;
+  color: #536271;
+  border-color: #cbd5df;
 }
 
 .status {

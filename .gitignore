@@ -9,6 +9,7 @@ backend/.env
 # Android
 android/.gradle/
 android/local.properties
+android/gradle/gradle-daemon-jvm.properties
 android/app/build/
 android/build/
 

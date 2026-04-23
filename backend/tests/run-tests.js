@@ -63,6 +63,8 @@ async function testRatios() {
   assert.equal(stats.networkRatios["3G"].count, 1);
   assert.equal(stats.networkRatios["2G"].count, 1);
   assert.equal(stats.overall.distinctDevices, 2);
+  assert.equal(stats.operatorQuality.length, 2);
+  assert.equal(stats.operatorQuality.find((row) => row.label === "alfa").averagePowerDbm, -85);
 
   io.close();
   await db.close();
