@@ -8,7 +8,7 @@ import {
   Clock3,
   Database,
   Filter,
-  Info,
+  List,
   Radio,
   RefreshCw,
   SignalHigh,
@@ -16,8 +16,6 @@ import {
   Wifi
 } from "lucide-react";
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -118,6 +116,7 @@ function ChartPanel({ title, icon: Icon, children, compact = false }) {
 }
 
 function App() {
+  const [page, setPage] = useState("dashboard");
   const [filters, setFilters] = useState({
     from: "",
     to: "",
@@ -132,6 +131,8 @@ function App() {
   const [measurements, setMeasurements] = useState([]);
   const [devices, setDevices] = useState([]);
   const [deviceStats, setDeviceStats] = useState([]);
+  const [allMeasurements, setAllMeasurements] = useState([]);
+  const [allMeasurementsTotal, setAllMeasurementsTotal] = useState(0);
   const [status, setStatus] = useState("Connecting");
   const [lastRefresh, setLastRefresh] = useState(null);
 
@@ -151,9 +152,24 @@ function App() {
     setStatus("Live");
   }
 
+  async function loadAllMeasurements() {
+    setStatus("Refreshing");
+    const result = await getJson("/api/measurements", { ...filters, all: true });
+    setAllMeasurements(result.rows);
+    setAllMeasurementsTotal(result.total ?? result.rows.length);
+    setLastRefresh(new Date());
+    setStatus("Live");
+  }
+
   useEffect(() => {
     load().catch((error) => setStatus(error.message));
   }, []);
+
+  useEffect(() => {
+    if (page === "recordings") {
+      loadAllMeasurements().catch((error) => setStatus(error.message));
+    }
+  }, [page]);
 
   useEffect(() => {
     const socket = io(API_BASE, { transports: ["websocket", "polling"] });
@@ -196,6 +212,38 @@ function App() {
     }));
   }, [summary]);
 
+  const providerComparisonData = useMemo(() => {
+    const alfaRow = operatorQualityData.find((row) => row.operator === "alfa");
+    const touchRow = operatorQualityData.find((row) => row.operator === "touch");
+    return [
+      {
+        metric: "Avg Power",
+        alfa: alfaRow?.averagePowerDbm ?? null,
+        touch: touchRow?.averagePowerDbm ?? null
+      },
+      {
+        metric: "Avg Noise",
+        alfa: alfaRow?.averageNoiseDb ?? null,
+        touch: touchRow?.averageNoiseDb ?? null
+      },
+      {
+        metric: "Samples",
+        alfa: alfaRow?.samples ?? 0,
+        touch: touchRow?.samples ?? 0
+      }
+    ];
+  }, [operatorQualityData]);
+
+  const devicePowerData = useMemo(() => {
+    return [...deviceStats]
+      .slice(0, 10)
+      .sort((a, b) => (b.averagePowerDbm ?? -999) - (a.averagePowerDbm ?? -999))
+      .map((row) => ({
+        deviceId: row.deviceId,
+        averagePowerDbm: row.averagePowerDbm
+      }));
+  }, [deviceStats]);
+
   const timeline = [...measurements]
     .reverse()
     .slice(-60)
@@ -211,59 +259,12 @@ function App() {
   const latestPower = summary?.latest?.signal_power_dbm ?? summary?.overall?.averagePowerDbm;
   const latestTier = powerTier(latestPower);
 
-  return (
-    <main>
-      <section className="hero">
-        <div>
-          <p className="eyebrow">EECE451 Distributed Cellular Measurements</p>
-          <h1>Mobile Network Analyzer</h1>
-          <p className="hero-copy">
-            Live Alfa/Touch coverage, radio generation ratios, signal quality trends, connected devices,
-            and server-side statistics from every phone streaming samples.
-          </p>
-          <div className="explain-strip">
-            <Info size={16} />
-            dBm is signal power: values closer to 0 are stronger. For example, -75 dBm is much better than -105 dBm.
-            SNR/SINR appears only when Android, the modem, and the current radio technology report it.
-          </div>
-        </div>
-        <div className="hero-status">
-          <span className={status === "Live" ? "pulse" : "pulse offline"} />
-          <strong>{status}</strong>
-          <small>{lastRefresh ? `Updated ${lastRefresh.toLocaleTimeString()}` : "Waiting for server"}</small>
-        </div>
-      </section>
-
-      <section className="toolbar">
-        <label>
-          <Clock3 size={16} />
-          <input type="datetime-local" value={filters.from} onChange={(event) => setFilters({ ...filters, from: event.target.value })} />
-        </label>
-        <label>
-          <Clock3 size={16} />
-          <input type="datetime-local" value={filters.to} onChange={(event) => setFilters({ ...filters, to: event.target.value })} />
-        </label>
-        <select value={filters.operator} onChange={(event) => setFilters({ ...filters, operator: event.target.value })}>
-          <option value="">All operators</option>
-          <option value="alfa">Alfa</option>
-          <option value="touch">Touch</option>
-          <option value="unknown">Unknown</option>
-        </select>
-        <select value={filters.networkGeneration} onChange={(event) => setFilters({ ...filters, networkGeneration: event.target.value })}>
-          <option value="">All generations</option>
-          <option value="2G">2G</option>
-          <option value="3G">3G</option>
-          <option value="4G">4G</option>
-          <option value="5G">5G</option>
-          <option value="unknown">Unknown</option>
-        </select>
-        <input placeholder="Min dBm" value={filters.minPower} onChange={(event) => setFilters({ ...filters, minPower: event.target.value })} />
-        <input placeholder="Max dBm" value={filters.maxPower} onChange={(event) => setFilters({ ...filters, maxPower: event.target.value })} />
-        <input placeholder="Cell ID" value={filters.cellId} onChange={(event) => setFilters({ ...filters, cellId: event.target.value })} />
-        <input placeholder="Device ID" value={filters.deviceId} onChange={(event) => setFilters({ ...filters, deviceId: event.target.value })} />
-        <button onClick={() => load().catch((error) => setStatus(error.message))}>
-          <RefreshCw size={16} />
-          Refresh
+  const content = page === "dashboard" ? (
+    <>
+      <section className="toolbar page-toolbar">
+        <button className="secondary-button" onClick={() => setPage("recordings")}>
+          <List size={16} />
+          View Recordings Database
         </button>
       </section>
 
@@ -292,17 +293,16 @@ function App() {
 
         <ChartPanel title="Alfa vs Touch Signal Quality" icon={SignalHigh}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={operatorQualityData}>
+            <BarChart data={providerComparisonData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#d9e2ea" />
-              <XAxis dataKey="operator" />
+              <XAxis dataKey="metric" />
               <YAxis />
               <Tooltip formatter={(value, name, item) => {
-                const unit = name === "averagePowerDbm" ? " dBm" : " dB";
-                const tier = name === "averagePowerDbm" ? item.payload.powerTier : item.payload.noiseTier;
-                return [`${value ?? "N/A"}${unit} (${tier})`, name === "averagePowerDbm" ? "Avg power" : "Avg SNR/SINR"];
+                const unit = item.payload.metric === "Samples" ? "" : item.payload.metric === "Avg Power" ? " dBm" : " dB";
+                return [`${value ?? "N/A"}${unit}`, name === "alfa" ? "Alfa" : "Touch"];
               }} />
-              <Bar dataKey="averagePowerDbm" fill="#14b8a6" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="averageNoiseDb" fill="#f97316" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="alfa" fill="#14b8a6" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="touch" fill="#6366f1" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartPanel>
@@ -330,15 +330,19 @@ function App() {
           </ResponsiveContainer>
         </ChartPanel>
 
-        <ChartPanel title="Average Power By User" icon={Smartphone} compact>
+        <ChartPanel title="Average Power By User" icon={Smartphone}>
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={deviceStats.slice(0, 12)}>
+            <BarChart
+              data={devicePowerData}
+              layout="vertical"
+              margin={{ top: 6, right: 12, left: 18, bottom: 6 }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#d9e2ea" />
-              <XAxis dataKey="deviceId" hide />
-              <YAxis />
+              <XAxis type="number" />
+              <YAxis type="category" dataKey="deviceId" width={90} />
               <Tooltip />
-              <Area dataKey="averagePowerDbm" stroke="#14b8a6" fill="#99f6e4" />
-            </AreaChart>
+              <Bar dataKey="averagePowerDbm" fill="#14b8a6" radius={[0, 6, 6, 0]} />
+            </BarChart>
           </ResponsiveContainer>
         </ChartPanel>
       </section>
@@ -387,6 +391,144 @@ function App() {
           </table>
         </section>
       </section>
+    </>
+  ) : (
+    <>
+      <section className="toolbar page-toolbar">
+        <button className="secondary-button" onClick={() => setPage("dashboard")}>
+          <BarChart3 size={16} />
+          Back To Dashboard
+        </button>
+        <button onClick={() => loadAllMeasurements().catch((error) => setStatus(error.message))}>
+          <RefreshCw size={16} />
+          Reload Database Rows
+        </button>
+      </section>
+
+      <section className="panel recordings-panel">
+        <header className="panel-title">
+          <Database size={18} />
+          <h2>All Database Recordings</h2>
+          <span className="panel-count">{allMeasurementsTotal} rows</span>
+        </header>
+        <p className="recordings-copy">Filter by date interval, user, provider, network type, cell, and signal range.</p>
+        <section className="toolbar recordings-toolbar">
+          <label>
+            <Clock3 size={16} />
+            <input type="datetime-local" value={filters.from} onChange={(event) => setFilters({ ...filters, from: event.target.value })} />
+          </label>
+          <label>
+            <Clock3 size={16} />
+            <input type="datetime-local" value={filters.to} onChange={(event) => setFilters({ ...filters, to: event.target.value })} />
+          </label>
+          <select value={filters.operator} onChange={(event) => setFilters({ ...filters, operator: event.target.value })}>
+            <option value="">All providers</option>
+            <option value="alfa">Alfa</option>
+            <option value="touch">Touch</option>
+          </select>
+          <select value={filters.networkGeneration} onChange={(event) => setFilters({ ...filters, networkGeneration: event.target.value })}>
+            <option value="">All generations</option>
+            <option value="2G">2G</option>
+            <option value="3G">3G</option>
+            <option value="4G">4G</option>
+            <option value="5G">5G</option>
+          </select>
+          <input placeholder="User / Device ID" value={filters.deviceId} onChange={(event) => setFilters({ ...filters, deviceId: event.target.value })} />
+          <input placeholder="Cell ID" value={filters.cellId} onChange={(event) => setFilters({ ...filters, cellId: event.target.value })} />
+          <input placeholder="Min dBm" value={filters.minPower} onChange={(event) => setFilters({ ...filters, minPower: event.target.value })} />
+          <input placeholder="Max dBm" value={filters.maxPower} onChange={(event) => setFilters({ ...filters, maxPower: event.target.value })} />
+          <button onClick={() => loadAllMeasurements().catch((error) => setStatus(error.message))}>
+            <Filter size={16} />
+            Apply Filters
+          </button>
+        </section>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>User</th>
+                <th>Provider</th>
+                <th>Network</th>
+                <th>Signal</th>
+                <th>Noise</th>
+                <th>Cell</th>
+                <th>Frequency</th>
+                <th>IP</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allMeasurements.map((row) => (
+                <tr key={row.id}>
+                  <td>{new Date(row.client_timestamp).toLocaleString()}</td>
+                  <td>{row.device_id}</td>
+                  <td>{row.operator}</td>
+                  <td><span className="badge">{row.network_generation}</span></td>
+                  <td>{metric(row.signal_power_dbm, " dBm")} <QualityBadge value={row.signal_power_dbm} /></td>
+                  <td>{metric(row.snr_db ?? row.sinr_db, " dB")} <QualityBadge value={row.snr_db ?? row.sinr_db} type="noise" /></td>
+                  <td>{row.cell_id || "N/A"}</td>
+                  <td>{row.frequency_band || row.earfcn || row.uarfcn || row.arfcn || row.nrarfcn || "N/A"}</td>
+                  <td>{row.source_ip || "N/A"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </>
+  );
+
+  return (
+    <main>
+      <section className="hero">
+        <div>
+          <p className="eyebrow">EECE451 Distributed Cellular Measurements</p>
+          <h1>Mobile Network Analyzer</h1>
+          <p className="hero-copy">
+            Live Alfa/Touch coverage, radio generation ratios, signal quality trends, connected devices,
+            and server-side statistics from every phone streaming samples.
+          </p>
+        </div>
+        <div className="hero-status">
+          <span className={status === "Live" ? "pulse" : "pulse offline"} />
+          <strong>{status}</strong>
+          <small>{lastRefresh ? `Updated ${lastRefresh.toLocaleTimeString()}` : "Waiting for server"}</small>
+        </div>
+      </section>
+
+      <section className="toolbar">
+        <label>
+          <Clock3 size={16} />
+          <input type="datetime-local" value={filters.from} onChange={(event) => setFilters({ ...filters, from: event.target.value })} />
+        </label>
+        <label>
+          <Clock3 size={16} />
+          <input type="datetime-local" value={filters.to} onChange={(event) => setFilters({ ...filters, to: event.target.value })} />
+        </label>
+        <select value={filters.operator} onChange={(event) => setFilters({ ...filters, operator: event.target.value })}>
+          <option value="">All operators</option>
+          <option value="alfa">Alfa</option>
+          <option value="touch">Touch</option>
+          <option value="unknown">Unknown</option>
+        </select>
+        <select value={filters.networkGeneration} onChange={(event) => setFilters({ ...filters, networkGeneration: event.target.value })}>
+          <option value="">All generations</option>
+          <option value="2G">2G</option>
+          <option value="3G">3G</option>
+          <option value="4G">4G</option>
+          <option value="5G">5G</option>
+          <option value="unknown">Unknown</option>
+        </select>
+        <input placeholder="Min dBm" value={filters.minPower} onChange={(event) => setFilters({ ...filters, minPower: event.target.value })} />
+        <input placeholder="Max dBm" value={filters.maxPower} onChange={(event) => setFilters({ ...filters, maxPower: event.target.value })} />
+        <input placeholder="Cell ID" value={filters.cellId} onChange={(event) => setFilters({ ...filters, cellId: event.target.value })} />
+        <input placeholder="Device ID" value={filters.deviceId} onChange={(event) => setFilters({ ...filters, deviceId: event.target.value })} />
+        <button onClick={() => load().catch((error) => setStatus(error.message))}>
+          <RefreshCw size={16} />
+          Refresh
+        </button>
+      </section>
+      {content}
     </main>
   );
 }

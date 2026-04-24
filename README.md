@@ -8,6 +8,7 @@ Full EECE451 mobile networks project implementation: an Android client streams c
 - Sends every sample directly to a backend over HTTP every 10 seconds.
 - Stores all samples in SQLite on the server, not on the phone.
 - Calculates Alfa/Touch ratios, 2G/3G/4G/5G ratios, average power, average SNR/SINR, connected devices, filtered sample lists, and per-device statistics.
+- Ignores all operators except Alfa and Touch so the dataset stays specific to Lebanon's two mobile operators.
 - Provides a live React dashboard with charts, filters, tables, and Socket.IO updates.
 - Includes Android demo mode for classroom demos without SIM/network API availability.
 
@@ -63,9 +64,7 @@ Modern Android restricts MAC address access for privacy. This project records st
 
 Cellular API availability varies by phone, Android version, SIM, operator, and permissions. Demo mode generates realistic Alfa/Touch and generation samples when physical cellular measurements are unavailable.
 
-SNR/SINR can be missing because Android does not expose it consistently for every radio generation, chipset, SIM/operator state, or serving cell. The app and dashboard show missing SNR/SINR as a device/network reporting limitation, not as a failed upload.
-
-Signal power is measured in dBm, where values closer to 0 are stronger. The UI translates raw dBm into tiers: Excellent, Good, Medium, Bad, Very Bad.
+SNR/SINR can be missing because Android does not expose it consistently for every radio generation, chipset, SIM/operator state, or serving cell. The app and dashboard show the available value and quality tier when it is reported.
 
 ## Main API Endpoints
 

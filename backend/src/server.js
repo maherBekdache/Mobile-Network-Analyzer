@@ -29,6 +29,9 @@ function validateMeasurement(body) {
 
   const rawOperator = parseString(body.operator) ?? "unknown";
   const operator = normalizeOperator(rawOperator);
+  if (!["alfa", "touch"].includes(operator)) {
+    errors.push("Only Alfa and Touch measurements are accepted");
+  }
   const networkGeneration = normalizeNetworkGeneration(body.networkGeneration, body.rawNetworkType);
   const clientTimestamp = toIsoTimestamp(body.timestamp ?? body.clientTimestamp ?? new Date());
 
@@ -198,14 +201,21 @@ export async function createApp({ db = null } = {}) {
 
   app.get("/api/measurements", async (req, res) => {
     const { where, params } = buildMeasurementWhere(req.query);
-    const limit = Math.min(Number(req.query.limit || 250), 1000);
-    const rows = await database.all(
-      `SELECT * FROM measurements ${where}
-       ORDER BY client_timestamp DESC, id DESC
-       LIMIT ?`,
-      [...params, limit]
-    );
-    res.json({ rows });
+    const totalRow = await database.get(`SELECT COUNT(*) AS total FROM measurements ${where}`, params);
+    const wantsAll = req.query.all === "true" || req.query.limit === "all";
+    const rows = wantsAll
+      ? await database.all(
+          `SELECT * FROM measurements ${where}
+           ORDER BY client_timestamp DESC, id DESC`,
+          params
+        )
+      : await database.all(
+          `SELECT * FROM measurements ${where}
+           ORDER BY client_timestamp DESC, id DESC
+           LIMIT ?`,
+          [...params, Math.min(Number(req.query.limit || 250), 1000)]
+        );
+    res.json({ rows, total: totalRow?.total ?? rows.length });
   });
 
   app.get("/api/stats/summary", async (req, res) => {

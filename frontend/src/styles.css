@@ -55,21 +55,6 @@ h1 {
   font-size: 1.04rem;
 }
 
-.explain-strip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 900px;
-  margin-top: 14px;
-  padding: 10px 12px;
-  border: 1px solid #bfe3de;
-  border-radius: 8px;
-  background: #e4f8f4;
-  color: #0f514c;
-  font-size: 0.92rem;
-  font-weight: 650;
-}
-
 .hero-status {
   display: grid;
   gap: 3px;
@@ -106,6 +91,12 @@ h1 {
   gap: 8px;
 }
 
+.page-toolbar {
+  grid-template-columns: repeat(2, max-content);
+  justify-content: end;
+  margin-top: -4px;
+}
+
 input,
 select,
 button {
@@ -135,6 +126,12 @@ button {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 14px;
+}
+
+.secondary-button {
+  border-color: #c6d3dc;
+  background: #ffffff;
+  color: #17212b;
 }
 
 .stat-card,
@@ -207,6 +204,13 @@ button {
   font-size: 1rem;
 }
 
+.panel-count {
+  margin-left: auto;
+  color: #5a6876;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .chart-box {
   width: 100%;
   height: 270px;
@@ -267,6 +271,25 @@ th {
   font-weight: 800;
 }
 
+.recordings-panel {
+  min-height: 0;
+}
+
+.recordings-copy {
+  margin: 10px 0 0;
+  color: #526170;
+}
+
+.recordings-toolbar {
+  grid-template-columns: repeat(4, minmax(130px, 1fr)) repeat(4, minmax(100px, 1fr)) auto;
+  margin-top: 14px;
+}
+
+.table-scroll {
+  overflow: auto;
+  margin-top: 10px;
+}
+
 .quality-badge {
   margin-left: 6px;
   border: 1px solid transparent;
@@ -321,6 +344,7 @@ th {
 
 @media (max-width: 1180px) {
   .toolbar,
+  .recordings-toolbar,
   .stats-grid,
   .dashboard-grid,
   .tables,
@@ -335,6 +359,7 @@ th {
   }
 
   .toolbar,
+  .recordings-toolbar,
   .stats-grid,
   .dashboard-grid,
   .tables,

@@ -41,6 +41,10 @@ async function testMalformedRejection() {
   const response = await send(app, "/api/measurements", { operator: "alfa" });
   assert.equal(response.status, 400);
   assert.match(response.body.errors[0], /deviceId/);
+
+  const ignored = await send(app, "/api/measurements", { deviceId: "x", operator: "other" });
+  assert.equal(ignored.status, 400);
+  assert.match(ignored.body.errors[0], /Only Alfa and Touch/);
   io.close();
   await db.close();
 }

@@ -82,6 +82,12 @@ public class MainActivity extends Activity {
     private TextView liveText;
     private TextView statsText;
     private TextView recentText;
+    private TextView operatorTile;
+    private TextView networkTile;
+    private TextView powerTile;
+    private TextView noiseTile;
+    private TextView cellTile;
+    private TextView uploadTile;
     private Button streamButton;
 
     private final Runnable sampleLoop = new Runnable() {
@@ -122,24 +128,30 @@ public class MainActivity extends Activity {
         root.setPadding(pad, pad, pad, pad);
         scrollView.addView(root);
 
-        TextView title = heroText("Mobile Network Analyzer");
-        TextView subtitle = text("Live cellular capture, Alfa/Touch comparisons, quality tiers, and server streaming every 10 seconds.", 15, false);
-        subtitle.setTextColor(Color.rgb(234, 248, 250));
-        root.addView(title);
-        root.addView(subtitle);
+        LinearLayout hero = block(Color.rgb(15, 118, 110));
+        TextView title = text("Mobile Network Analyzer", 30, true);
+        title.setTextColor(Color.WHITE);
+        TextView subtitle = text("Alfa vs Touch live signal monitor", 16, true);
+        subtitle.setTextColor(Color.rgb(204, 251, 241));
+        hero.addView(title);
+        hero.addView(subtitle);
+        root.addView(hero);
 
+        LinearLayout config = block(Color.WHITE);
+        config.addView(sectionTitle("Server & Capture"));
         serverInput = new EditText(this);
         serverInput.setSingleLine(true);
         serverInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         serverInput.setHint("http://192.168.1.10:8080");
         serverInput.setText(preferences.getString("serverUrl", "http://10.0.2.2:8080"));
-        root.addView(label("Server URL"));
-        root.addView(serverInput);
+        config.addView(label("Server URL"));
+        config.addView(serverInput);
 
         demoMode = new CheckBox(this);
         demoMode.setText("Demo mode (generate Alfa/Touch samples without SIM access)");
         demoMode.setTextColor(Color.rgb(19, 32, 43));
-        root.addView(demoMode);
+        config.addView(demoMode);
+        root.addView(config);
 
         GridLayout controls = new GridLayout(this);
         controls.setColumnCount(2);
@@ -152,7 +164,30 @@ public class MainActivity extends Activity {
         controls.addView(onceButton);
         controls.addView(statsButton);
         controls.addView(recentButton);
-        root.addView(controls);
+        LinearLayout controlsBlock = block(Color.WHITE);
+        controlsBlock.addView(sectionTitle("Controls"));
+        controlsBlock.addView(controls);
+        root.addView(controlsBlock);
+
+        GridLayout tiles = new GridLayout(this);
+        tiles.setColumnCount(2);
+        tiles.setUseDefaultMargins(true);
+        operatorTile = tile("Operator", "Waiting", Color.rgb(236, 253, 245));
+        networkTile = tile("Network", "Waiting", Color.rgb(238, 242, 255));
+        powerTile = tile("Signal", "Waiting", Color.rgb(254, 243, 199));
+        noiseTile = tile("Noise", "Waiting", Color.rgb(255, 237, 213));
+        cellTile = tile("Cell", "Waiting", Color.rgb(240, 249, 255));
+        uploadTile = tile("Upload", "Ready", Color.rgb(232, 243, 247));
+        tiles.addView(operatorTile);
+        tiles.addView(networkTile);
+        tiles.addView(powerTile);
+        tiles.addView(noiseTile);
+        tiles.addView(cellTile);
+        tiles.addView(uploadTile);
+        LinearLayout tilesBlock = block(Color.WHITE);
+        tilesBlock.addView(sectionTitle("Live Snapshot"));
+        tilesBlock.addView(tiles);
+        root.addView(tilesBlock);
 
         qualityText = card("Signal Quality", Color.rgb(220, 252, 231));
         statusText = card("Status", Color.WHITE);
@@ -188,6 +223,42 @@ public class MainActivity extends Activity {
         view.setTextColor(Color.WHITE);
         view.setPadding(dp(16), dp(18), dp(16), dp(6));
         view.setBackground(rounded(Color.rgb(15, 118, 110), dp(8)));
+        return view;
+    }
+
+    private LinearLayout block(int background) {
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(14), dp(14), dp(14), dp(14));
+        layout.setBackground(rounded(background, dp(8)));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        params.setMargins(0, 0, 0, dp(12));
+        layout.setLayoutParams(params);
+        return layout;
+    }
+
+    private TextView sectionTitle(String value) {
+        TextView view = text(value, 17, true);
+        view.setTextColor(Color.rgb(15, 81, 76));
+        view.setPadding(0, 0, 0, dp(8));
+        return view;
+    }
+
+    private TextView tile(String label, String value, int background) {
+        TextView view = text(label + "\n" + value, 15, true);
+        view.setMinHeight(dp(86));
+        view.setGravity(Gravity.CENTER_VERTICAL);
+        view.setPadding(dp(12), dp(10), dp(12), dp(10));
+        view.setBackground(rounded(background, dp(8)));
+        GridLayout.LayoutParams params = new GridLayout.LayoutParams();
+        params.width = 0;
+        params.height = GridLayout.LayoutParams.WRAP_CONTENT;
+        params.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
+        params.setMargins(dp(4), dp(4), dp(4), dp(4));
+        view.setLayoutParams(params);
         return view;
     }
 
@@ -246,6 +317,10 @@ public class MainActivity extends Activity {
     private void captureAndSend() {
         Measurement measurement = demoMode.isChecked() ? demoMeasurement() : collectMeasurement();
         renderLive(measurement);
+        if (!isAllowedOperator(measurement.operator)) {
+            updateStatus("Skipped sample: only Alfa and Touch recordings are accepted.");
+            return;
+        }
         postMeasurement(measurement);
     }
 
@@ -494,12 +569,16 @@ public class MainActivity extends Activity {
 
     private void renderLive(Measurement m) {
         String tier = signalTier(m.signalPowerDbm == null ? Double.NaN : m.signalPowerDbm);
-        String noise = m.snrDb != null ? m.snrDb + " dB SNR" : (m.sinrDb != null ? m.sinrDb + " dB SINR" : "Not reported by this device/network");
+        String noise = m.snrDb != null ? m.snrDb + " dB SNR" : (m.sinrDb != null ? m.sinrDb + " dB SINR" : "Not reported");
+        setTile(operatorTile, "Operator", m.operator, operatorColor(m.operator));
+        setTile(networkTile, "Network", m.networkGeneration + " / " + nullText(m.rawNetworkType), Color.rgb(238, 242, 255));
+        setTile(powerTile, "Signal", tier + "\n" + nullText(m.signalPowerDbm) + " dBm", signalTierColor(tier));
+        setTile(noiseTile, "Noise", noise, m.snrDb != null || m.sinrDb != null ? Color.rgb(255, 237, 213) : Color.rgb(238, 242, 244));
+        setTile(cellTile, "Cell", nullText(m.cellId), Color.rgb(240, 249, 255));
         String quality = "Signal Quality\n"
                 + tier + "  " + qualityBar(m.signalPowerDbm) + "\n"
-                + "Power: " + nullText(m.signalPowerDbm) + " dBm. Closer to 0 is stronger, so -75 is better than -105.\n"
-                + "Noise: " + noise + "\n"
-                + "SNR/SINR is often missing on 2G/3G or when Android/modem/operator do not expose it.";
+                + "Power: " + nullText(m.signalPowerDbm) + " dBm\n"
+                + "Noise: " + noise;
         setText(qualityText, quality);
         qualityText.setBackground(rounded(signalTierColor(tier), dp(8)));
 
@@ -516,6 +595,27 @@ public class MainActivity extends Activity {
         builder.append("Timestamp: ").append(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(m.timestamp)).append("\n");
         if (m.error != null) builder.append("Note: ").append(m.error).append("\n");
         setText(liveText, builder.toString());
+    }
+
+    private void setTile(TextView view, String label, String value, int color) {
+        handler.post(() -> {
+            view.setText(label + "\n" + value);
+            view.setBackground(rounded(color, dp(8)));
+        });
+    }
+
+    private boolean isAllowedOperator(String operator) {
+        if (operator == null) return false;
+        String text = operator.toLowerCase(Locale.US);
+        return text.contains("alfa") || text.contains("alpha") || text.contains("touch") || text.contains("mtc");
+    }
+
+    private int operatorColor(String operator) {
+        if (operator == null) return Color.rgb(238, 242, 244);
+        String text = operator.toLowerCase(Locale.US);
+        if (text.contains("alfa") || text.contains("alpha")) return Color.rgb(220, 252, 231);
+        if (text.contains("touch") || text.contains("mtc")) return Color.rgb(219, 234, 254);
+        return Color.rgb(238, 242, 244);
     }
 
     private String signalTier(double powerDbm) {
@@ -553,6 +653,33 @@ public class MainActivity extends Activity {
 
     private void updateStatus(String message) {
         setText(statusText, "Status\n" + message);
+        if (uploadTile != null) {
+            setTile(
+                    uploadTile,
+                    "Upload",
+                    compactUploadMessage(message),
+                    message.toLowerCase(Locale.US).contains("failed") || message.toLowerCase(Locale.US).contains("skipped")
+                            ? Color.rgb(254, 226, 226)
+                            : Color.rgb(216, 245, 239)
+            );
+        }
+    }
+
+    private String compactUploadMessage(String message) {
+        String lower = message.toLowerCase(Locale.US);
+        if (lower.contains("uploaded sample #")) {
+            int start = lower.indexOf("uploaded sample #");
+            int to = lower.indexOf(" to ", start);
+            if (to > start) {
+                return message.substring(start, to);
+            }
+            return "Uploaded";
+        }
+        if (lower.contains("upload failed")) return "Upload failed";
+        if (lower.contains("skipped sample")) return "Skipped sample";
+        if (lower.contains("streaming started")) return "Streaming";
+        if (lower.contains("streaming stopped")) return "Stopped";
+        return "Ready";
     }
 
     private void setText(TextView view, String message) {
