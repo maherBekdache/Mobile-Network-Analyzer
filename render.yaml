@@ -13,8 +13,9 @@ services:
       - key: DB_FILE
         value: ./data/network-analyzer.sqlite
 
-  - type: static_site
+  - type: web
     name: maher-mobile-network-analyzer-web
+    runtime: static
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/dist
     envVars:

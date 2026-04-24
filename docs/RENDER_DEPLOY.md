@@ -12,6 +12,13 @@ The repo includes:
 - `.node-version` pinned to `22.22.0`
 - `render.yaml` blueprint for both services
 
+In Render Blueprints, a static site must be declared as:
+
+- `type: web`
+- `runtime: static`
+
+It is not declared as `static_site`.
+
 ## Important Limitation
 
 The current backend uses SQLite. On Render free web services, SQLite data is temporary because Render's free local filesystem is not persistent. For a real persistent hosted demo, the next upgrade should be migrating the backend from SQLite to Render Postgres.
