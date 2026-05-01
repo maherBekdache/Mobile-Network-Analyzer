@@ -1,6 +1,6 @@
 # Mobile Network Analyzer
 
-Full EECE451 mobile networks project implementation: an Android client streams cellular measurements to a separate multithread-capable server, the server stores and analyzes the data, and a React dashboard shows realtime centralized statistics.
+An Android client streams cellular measurements to a separate multithread-capable server, the server stores and analyzes the data, and a React dashboard shows realtime centralized statistics.
 
 ## What It Does
 
