@@ -45,6 +45,7 @@ import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.ArrayAdapter;
+import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -550,11 +551,13 @@ public class MainActivity extends Activity {
         pulseButton(streamButton);
         if (streaming) {
             updateStatus("Streaming started. Next samples will be sent every 10 seconds.");
+            showToast("Streaming started");
             captureAndSend();
             handler.postDelayed(sampleLoop, SAMPLE_INTERVAL_MS);
         } else {
             handler.removeCallbacks(sampleLoop);
             updateStatus("Streaming stopped.");
+            showToast("Streaming stopped");
         }
     }
 
@@ -564,6 +567,7 @@ public class MainActivity extends Activity {
         renderLive(measurement);
         if (!isAllowedOperator(measurement.operator)) {
             updateStatus("Skipped sample: only Alfa and Touch recordings are accepted.");
+            showToast("Sample skipped");
             return;
         }
         postMeasurement(measurement);
@@ -574,9 +578,12 @@ public class MainActivity extends Activity {
             try {
                 JSONObject body = measurement.toJson();
                 JSONObject response = request("POST", "/api/measurements", body);
-                updateStatus("Uploaded sample #" + response.getJSONObject("measurement").getLong("id") + " to " + normalizedServer());
+                long id = response.getJSONObject("measurement").getLong("id");
+                updateStatus("Uploaded sample #" + id + " to " + normalizedServer());
+                showToast("Sample sent (#" + id + ")");
             } catch (Exception error) {
                 updateStatus("Upload failed: " + error.getMessage());
+                showToast("Upload failed");
             }
         });
     }
@@ -587,8 +594,10 @@ public class MainActivity extends Activity {
                 JSONObject stats = request("GET", "/api/stats/summary?deviceId=" + deviceId, null);
                 setText(statsText, formatStatsSummary(stats, "This Device Statistics", true));
                 setTopStatus("This device statistics refreshed", Color.rgb(219, 234, 254), Color.rgb(30, 64, 175));
+                showToast("This device stats loaded");
             } catch (Exception error) {
                 updateStatus("Device stats failed: " + error.getMessage());
+                showToast("Device stats failed");
             }
         });
     }
@@ -599,8 +608,10 @@ public class MainActivity extends Activity {
                 JSONObject stats = request("GET", "/api/stats/summary", null);
                 setText(statsText, formatStatsSummary(stats, "All Server Statistics", false));
                 setTopStatus("Server statistics refreshed", Color.rgb(219, 234, 254), Color.rgb(30, 64, 175));
+                showToast("Server stats loaded");
             } catch (Exception error) {
                 updateStatus("Server stats failed: " + error.getMessage());
+                showToast("Server stats failed");
             }
         });
     }
@@ -619,6 +630,8 @@ public class MainActivity extends Activity {
                 }
                 if (rows.length() == 0) {
                     builder.append("No server entries matched the history filters.\n");
+                } else {
+                    builder.append(buildHistorySummary(rows)).append("\n");
                 }
                 for (int i = 0; i < rows.length(); i++) {
                     JSONObject row = rows.getJSONObject(i);
@@ -632,10 +645,64 @@ public class MainActivity extends Activity {
                 }
                 setText(recentText, builder.toString());
                 setTopStatus("History loaded", Color.rgb(254, 243, 199), Color.rgb(146, 64, 14));
+                showToast(hasHistoryFilters() || !historyQualityTier().isEmpty() ? "History filtered" : "Latest 10 rows loaded");
             } catch (Exception error) {
                 updateStatus("History failed: " + error.getMessage());
+                showToast("History load failed");
             }
         });
+    }
+
+    private String buildHistorySummary(JSONArray rows) throws Exception {
+        int alfa = 0;
+        int touch = 0;
+        int g2 = 0;
+        int g3 = 0;
+        int g4 = 0;
+        int g5 = 0;
+        int withPower = 0;
+        double powerSum = 0;
+        double bestPower = Double.NEGATIVE_INFINITY;
+        double worstPower = Double.POSITIVE_INFINITY;
+
+        for (int i = 0; i < rows.length(); i++) {
+            JSONObject row = rows.getJSONObject(i);
+            String operator = row.optString("operator", "").toLowerCase(Locale.US);
+            if ("alfa".equals(operator)) alfa++;
+            if ("touch".equals(operator)) touch++;
+
+            String generation = row.optString("network_generation", "");
+            if ("2G".equals(generation)) g2++;
+            if ("3G".equals(generation)) g3++;
+            if ("4G".equals(generation)) g4++;
+            if ("5G".equals(generation)) g5++;
+
+            if (!row.isNull("signal_power_dbm")) {
+                double power = row.optDouble("signal_power_dbm", Double.NaN);
+                if (!Double.isNaN(power)) {
+                    withPower++;
+                    powerSum += power;
+                    bestPower = Math.max(bestPower, power);
+                    worstPower = Math.min(worstPower, power);
+                }
+            }
+        }
+
+        StringBuilder summary = new StringBuilder("Summary\n");
+        summary.append("Alfa/Touch: ").append(alfa).append("/").append(touch).append("\n");
+        summary.append("2G/3G/4G/5G: ").append(g2).append("/").append(g3).append("/").append(g4).append("/").append(g5).append("\n");
+        if (withPower > 0) {
+            double averagePower = powerSum / withPower;
+            summary.append("Average power: ")
+                    .append(String.format(Locale.US, "%.2f", averagePower))
+                    .append(" dBm (").append(signalTier(averagePower)).append(")\n");
+            summary.append("Best/Worst power: ")
+                    .append(String.format(Locale.US, "%.0f", bestPower)).append(" / ")
+                    .append(String.format(Locale.US, "%.0f", worstPower)).append(" dBm\n");
+        } else {
+            summary.append("Average power: N/A\n");
+        }
+        return summary.toString();
     }
 
     private String formatRatios(JSONObject ratios) {
@@ -1109,6 +1176,10 @@ public class MainActivity extends Activity {
                     topStatusChip.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
             ).start();
         });
+    }
+
+    private void showToast(String message) {
+        handler.post(() -> Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show());
     }
 
     private void showDateTimePicker(EditText target) {
