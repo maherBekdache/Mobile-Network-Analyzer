@@ -1,0 +1,29 @@
+Mobile Network Analyzer Packaging Guide
+=======================================
+
+This folder contains a separate packaging pipeline for a portable desktop and Android app delivery.
+It does not modify the working Android, backend, or frontend source files.
+
+Files produced by the build script:
+
+- dist\MobileNetworkAnalyzer.apk
+  Installable Android APK.
+
+- dist\Launch-Mobile-Network-Analyzer.exe
+  One-click Windows launcher for the local service and dashboard.
+
+- dist\MobileNetworkAnalyzerApp\
+  The extracted packaged app folder used by the launcher.
+
+How to use the packaged app:
+
+1. Install MobileNetworkAnalyzer.apk on the Android device, or load it into an Android Studio emulator.
+2. Make sure the Android device and the Windows computer are on the same local network when using a real phone.
+3. Double-click Launch-Mobile-Network-Analyzer.exe on the Windows computer.
+4. The dashboard opens automatically in the browser.
+5. The launcher window prints the address to enter in the Android app.
+6. Keep the launcher window open while the app is running.
+
+Build command for the package on the project machine:
+
+  powershell -ExecutionPolicy Bypass -File .\submission\build-submission.ps1

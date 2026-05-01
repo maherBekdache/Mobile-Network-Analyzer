@@ -227,6 +227,15 @@ button:active {
   color: #0f766e;
 }
 
+.stat-icon svg,
+.panel-title svg,
+.input-with-icon svg,
+button svg {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -274,13 +283,14 @@ button:active {
 
 .tables {
   display: grid;
-  grid-template-columns: 1.5fr 1fr;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
   gap: 16px;
   margin-top: 16px;
 }
 
 .table-panel {
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -334,8 +344,22 @@ th {
 }
 
 .table-scroll {
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
   margin-top: 10px;
+  padding-bottom: 2px;
+}
+
+.table-scroll table {
+  min-width: 640px;
+}
+
+.cell-truncate {
+  display: inline-block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
 }
 
 .quality-badge {
@@ -395,9 +419,12 @@ th {
   .recordings-toolbar,
   .stats-grid,
   .dashboard-grid,
-  .tables,
   .hero {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .tables {
+    grid-template-columns: 1fr;
   }
 }
 

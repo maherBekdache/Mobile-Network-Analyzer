@@ -67,6 +67,25 @@ function metric(value, suffix = "") {
   return `${value}${suffix}`;
 }
 
+function serverTimestampLabel(row) {
+  return row?.display_timestamp || row?.server_timestamp || row?.client_timestamp || "N/A";
+}
+
+function serverTimeOnly(row) {
+  const label = serverTimestampLabel(row);
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(label)) return label.slice(11, 16);
+  const parsed = new Date(label);
+  return Number.isNaN(parsed.getTime())
+    ? label
+    : parsed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function compactText(value, head = 16, tail = 6) {
+  const text = String(value ?? "");
+  if (text.length <= head + tail + 1) return text;
+  return `${text.slice(0, head)}...${text.slice(-tail)}`;
+}
+
 function powerTier(value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
     return { label: "Unknown", className: "unknown", hint: "Not reported" };
@@ -238,7 +257,7 @@ function App() {
     .reverse()
     .slice(-60)
     .map((row) => ({
-      time: new Date(row.client_timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      time: serverTimeOnly(row),
       power: row.signal_power_dbm,
       snr: row.snr_db ?? row.sinr_db
     }));
@@ -325,45 +344,49 @@ function App() {
       <section className="tables">
         <section className="panel table-panel">
           <header className="panel-title"><Activity size={18} /><h2>Latest Samples</h2></header>
-          <table>
-            <thead>
-              <tr><th>Time</th><th>Device</th><th>Operator</th><th>Gen</th><th>Power</th><th>SNR/SINR</th><th>Cell</th></tr>
-            </thead>
-            <tbody>
-              {measurements.slice(0, 20).map((row) => (
-                <tr key={row.id}>
-                  <td>{new Date(row.client_timestamp).toLocaleString()}</td>
-                  <td>{row.device_id}</td>
-                  <td>{row.operator}</td>
-                  <td><span className="badge">{row.network_generation}</span></td>
-                  <td>{metric(row.signal_power_dbm, " dBm")} <QualityBadge value={row.signal_power_dbm} /></td>
-                  <td>{metric(row.snr_db ?? row.sinr_db, " dB")} <QualityBadge value={row.snr_db ?? row.sinr_db} type="noise" /></td>
-                  <td>{row.cell_id || "N/A"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr><th>Time</th><th>Device</th><th>Operator</th><th>Gen</th><th>Power</th><th>SNR/SINR</th><th>Cell</th></tr>
+              </thead>
+              <tbody>
+                {measurements.slice(0, 20).map((row) => (
+                  <tr key={row.id}>
+                    <td>{serverTimestampLabel(row)}</td>
+                    <td title={row.device_id}><span className="cell-truncate">{compactText(row.device_id, 18, 6)}</span></td>
+                    <td>{row.operator}</td>
+                    <td><span className="badge">{row.network_generation}</span></td>
+                    <td>{metric(row.signal_power_dbm, " dBm")} <QualityBadge value={row.signal_power_dbm} /></td>
+                    <td>{metric(row.snr_db ?? row.sinr_db, " dB")} <QualityBadge value={row.snr_db ?? row.sinr_db} type="noise" /></td>
+                    <td>{row.cell_id || "N/A"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section className="panel table-panel">
           <header className="panel-title"><Smartphone size={18} /><h2>Devices</h2></header>
-          <table>
-            <thead>
-              <tr><th>Status</th><th>Device</th><th>Last IP</th><th>Samples</th><th>Avg Power</th><th>Tier</th></tr>
-            </thead>
-            <tbody>
-              {deviceStats.map((row) => (
-                <tr key={row.deviceId}>
-                  <td><span className={row.isActive ? "status active" : "status"}>{row.isActive ? "Active" : "Seen"}</span></td>
-                  <td>{row.deviceId}</td>
-                  <td>{row.lastIp || "N/A"}</td>
-                  <td>{row.totalSamples}</td>
-                  <td>{metric(row.averagePowerDbm, " dBm")}</td>
-                  <td><QualityBadge value={row.averagePowerDbm} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr><th>Status</th><th>Device</th><th>Last IP</th><th>Samples</th><th>Avg Power</th><th>Tier</th></tr>
+              </thead>
+              <tbody>
+                {deviceStats.map((row) => (
+                  <tr key={row.deviceId}>
+                    <td><span className={row.isActive ? "status active" : "status"}>{row.isActive ? "Active" : "Seen"}</span></td>
+                    <td title={row.deviceId}><span className="cell-truncate">{compactText(row.deviceId, 18, 6)}</span></td>
+                    <td>{row.lastIp || "N/A"}</td>
+                    <td>{row.totalSamples}</td>
+                    <td>{metric(row.averagePowerDbm, " dBm")}</td>
+                    <td><QualityBadge value={row.averagePowerDbm} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       </section>
     </>
@@ -451,7 +474,7 @@ function App() {
             <tbody>
               {allMeasurements.map((row) => (
                 <tr key={row.id}>
-                  <td>{new Date(row.client_timestamp).toLocaleString()}</td>
+                  <td>{serverTimestampLabel(row)}</td>
                   <td>{row.device_id}</td>
                   <td>{row.operator}</td>
                   <td><span className="badge">{row.network_generation}</span></td>

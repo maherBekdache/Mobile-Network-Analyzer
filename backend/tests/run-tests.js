@@ -79,7 +79,11 @@ async function testDateFiltering() {
   await send(app, "/api/measurements", { deviceId: "a", operator: "alfa", networkGeneration: "4G", signalPowerDbm: -70, timestamp: "2026-04-22T09:00:00Z" });
   await send(app, "/api/measurements", { deviceId: "a", operator: "touch", networkGeneration: "4G", signalPowerDbm: -90, timestamp: "2026-04-22T11:00:00Z" });
 
-  const response = await get(app, "/api/stats/summary?from=2026-04-22T10:00:00Z&to=2026-04-22T12:00:00Z");
+  const rows = await db.all("SELECT operator, server_timestamp FROM measurements ORDER BY id ASC");
+  const response = await get(
+    app,
+    `/api/stats/summary?from=${encodeURIComponent(rows[1].server_timestamp)}&to=${encodeURIComponent(rows[1].server_timestamp)}`
+  );
   assert.equal(response.status, 200);
   assert.equal(response.body.totalSamples, 1);
   assert.equal(response.body.operatorRatios.touch.count, 1);

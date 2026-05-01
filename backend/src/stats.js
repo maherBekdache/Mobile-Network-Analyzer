@@ -12,11 +12,11 @@ export function buildMeasurementWhere(query = {}) {
   const params = [];
 
   if (query.from) {
-    clauses.push("client_timestamp >= ?");
+    clauses.push("server_timestamp >= ?");
     params.push(new Date(query.from).toISOString());
   }
   if (query.to) {
-    clauses.push("client_timestamp <= ?");
+    clauses.push("server_timestamp <= ?");
     params.push(new Date(query.to).toISOString());
   }
 
@@ -96,7 +96,7 @@ export async function getSummaryStats(db, query = {}) {
   const totalRow = await db.get(`SELECT COUNT(*) AS total FROM measurements ${where}`, params);
   const total = totalRow?.total ?? 0;
   const latest = await db.get(
-    `SELECT * FROM measurements ${where} ORDER BY client_timestamp DESC, id DESC LIMIT 1`,
+    `SELECT * FROM measurements ${where} ORDER BY server_timestamp DESC, id DESC LIMIT 1`,
     params
   );
 
@@ -164,7 +164,7 @@ export async function getDeviceStats(db, query = {}) {
        COUNT(DISTINCT m.cell_id) AS distinctCells
      FROM devices d
      LEFT JOIN measurements m ON m.device_id = d.device_id
-     ${where ? where.replaceAll("client_timestamp", "m.client_timestamp").replaceAll("operator", "m.operator").replaceAll("network_generation", "m.network_generation").replaceAll("device_id", "m.device_id").replaceAll("cell_id", "m.cell_id").replaceAll("signal_power_dbm", "m.signal_power_dbm") : ""}
+     ${where ? where.replaceAll("server_timestamp", "m.server_timestamp").replaceAll("operator", "m.operator").replaceAll("network_generation", "m.network_generation").replaceAll("device_id", "m.device_id").replaceAll("cell_id", "m.cell_id").replaceAll("signal_power_dbm", "m.signal_power_dbm") : ""}
      GROUP BY d.device_id
      ORDER BY d.is_active DESC, d.last_seen DESC`,
     params

@@ -15,6 +15,32 @@ import { buildMeasurementWhere, getDeviceStats, getSummaryStats } from "./stats.
 
 const PORT = Number(process.env.PORT || 8080);
 const ACTIVE_WINDOW_SECONDS = Number(process.env.ACTIVE_DEVICE_WINDOW_SECONDS || 35);
+const DISPLAY_TIME_ZONE = "Asia/Beirut";
+
+function toServerLocalTimestamp(isoValue) {
+  const date = new Date(isoValue);
+  if (Number.isNaN(date.getTime())) return null;
+  const formatter = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: DISPLAY_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  });
+  return formatter.format(date).replace(",", "");
+}
+
+function withDisplayTimestamp(row) {
+  if (!row) return row;
+  return {
+    ...row,
+    display_timestamp: toServerLocalTimestamp(row.server_timestamp),
+    display_timezone: DISPLAY_TIME_ZONE
+  };
+}
 
 function clientIp(req) {
   const forwarded = req.headers["x-forwarded-for"];
@@ -206,20 +232,24 @@ export async function createApp({ db = null } = {}) {
     const rows = wantsAll
       ? await database.all(
           `SELECT * FROM measurements ${where}
-           ORDER BY client_timestamp DESC, id DESC`,
+           ORDER BY server_timestamp DESC, id DESC`,
           params
         )
       : await database.all(
           `SELECT * FROM measurements ${where}
-           ORDER BY client_timestamp DESC, id DESC
+           ORDER BY server_timestamp DESC, id DESC
            LIMIT ?`,
           [...params, Math.min(Number(req.query.limit || 250), 1000)]
         );
-    res.json({ rows, total: totalRow?.total ?? rows.length });
+    res.json({ rows: rows.map(withDisplayTimestamp), total: totalRow?.total ?? rows.length });
   });
 
   app.get("/api/stats/summary", async (req, res) => {
-    res.json(await getSummaryStats(database, req.query));
+    const summary = await getSummaryStats(database, req.query);
+    res.json({
+      ...summary,
+      latest: withDisplayTimestamp(summary.latest)
+    });
   });
 
   app.get("/api/stats/devices", async (req, res) => {

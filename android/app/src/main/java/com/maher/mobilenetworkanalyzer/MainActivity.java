@@ -635,7 +635,7 @@ public class MainActivity extends Activity {
                 }
                 for (int i = 0; i < rows.length(); i++) {
                     JSONObject row = rows.getJSONObject(i);
-                    builder.append(row.optString("client_timestamp")).append(" | ")
+                    builder.append(row.optString("display_timestamp", row.optString("server_timestamp", row.optString("client_timestamp")))).append(" | ")
                             .append(row.optString("device_id")).append(" | ")
                             .append(row.optString("operator")).append(" | ")
                             .append(row.optString("network_generation")).append(" | ")
