@@ -56,7 +56,26 @@ cd android
 .\gradlew.bat assembleDebug
 ```
 
-Install `android/app/build/outputs/apk/debug/app-debug.apk` on the phone. Open the app, enter the laptop backend URL, enable demo mode if needed, and start streaming.
+Install `android/app/build/outputs/apk/debug/app-debug.apk` on the phone or run from Android Studio.
+
+Use one of these backend URLs inside the app:
+
+- Android Studio emulator: `http://10.0.2.2:8080`
+- Real phone on the same Wi-Fi as the laptop: `http://<laptop-ip>:8080`
+
+Current Android app flow:
+
+- `Capture` tab:
+  - enter the backend URL
+  - enable demo mode if needed
+  - use `Start Streaming` or `Send One Sample`
+- `Stats` tab:
+  - `Load This Device Stats` shows server-calculated stats only for this device ID
+  - `Load All Server Stats` shows stats for the full server dataset
+- `History` tab:
+  - loads the latest 10 rows by default
+  - supports filters for time interval, device ID, cell ID, power range, operator, generation, and signal tier
+  - includes quick time presets such as `Last 10 Min`, `Last Hour`, and `Today`
 
 ## Important Android Notes
 

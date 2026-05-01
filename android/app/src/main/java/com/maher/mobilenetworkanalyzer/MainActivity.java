@@ -2,6 +2,8 @@ package com.maher.mobilenetworkanalyzer;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.DatePickerDialog;
+import android.app.TimePickerDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -31,6 +33,7 @@ import android.telephony.CellSignalStrengthNr;
 import android.telephony.CellSignalStrengthWcdma;
 import android.telephony.TelephonyManager;
 import android.text.InputType;
+import android.view.MotionEvent;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
@@ -39,7 +42,9 @@ import android.widget.EditText;
 import android.widget.GridLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Spinner;
 import android.widget.TextView;
+import android.widget.ArrayAdapter;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -52,8 +57,10 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -65,6 +72,12 @@ import java.util.concurrent.Executors;
 public class MainActivity extends Activity {
     private static final int PERMISSION_REQUEST = 451;
     private static final long SAMPLE_INTERVAL_MS = 10_000L;
+    private static final int COLOR_TEAL = Color.rgb(15, 118, 110);
+    private static final int COLOR_GREEN = Color.rgb(22, 163, 74);
+    private static final int COLOR_RED = Color.rgb(220, 38, 38);
+    private static final int COLOR_BLUE = Color.rgb(59, 130, 246);
+    private static final int COLOR_ORANGE = Color.rgb(234, 88, 12);
+    private static final int COLOR_TEXT_DARK = Color.rgb(19, 32, 43);
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -74,6 +87,7 @@ public class MainActivity extends Activity {
     private String sessionId;
     private boolean streaming = false;
     private int demoCounter = 0;
+    private String currentTab = "capture";
 
     private EditText serverInput;
     private CheckBox demoMode;
@@ -88,7 +102,32 @@ public class MainActivity extends Activity {
     private TextView noiseTile;
     private TextView cellTile;
     private TextView uploadTile;
+    private TextView topStatusChip;
+    private TextView tabCapture;
+    private TextView tabStats;
+    private TextView tabLatestRows;
+    private EditText historyFromInput;
+    private EditText historyToInput;
+    private EditText historyDeviceInput;
+    private EditText historyCellInput;
+    private EditText historyMinPowerInput;
+    private EditText historyMaxPowerInput;
+    private Spinner historyOperatorSpinner;
+    private Spinner historyGenerationSpinner;
+    private Spinner historyQualitySpinner;
     private Button streamButton;
+    private Button onceButton;
+    private Button deviceStatsButton;
+    private Button serverStatsButton;
+    private Button latestRowsButton;
+    private Button clearHistoryFiltersButton;
+    private Button historyLast10MinButton;
+    private Button historyLastHourButton;
+    private Button historyTodayButton;
+    private Button historyCustomRangeButton;
+    private LinearLayout captureSection;
+    private LinearLayout statsSection;
+    private LinearLayout latestRowsSection;
 
     private final Runnable sampleLoop = new Runnable() {
         @Override
@@ -122,6 +161,7 @@ public class MainActivity extends Activity {
         int pad = dp(16);
         ScrollView scrollView = new ScrollView(this);
         scrollView.setBackgroundColor(Color.rgb(232, 243, 247));
+        scrollView.setFillViewport(true);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -131,11 +171,31 @@ public class MainActivity extends Activity {
         LinearLayout hero = block(Color.rgb(15, 118, 110));
         TextView title = text("Mobile Network Analyzer", 30, true);
         title.setTextColor(Color.WHITE);
-        TextView subtitle = text("Alfa vs Touch live signal monitor", 16, true);
+        TextView subtitle = text("Live Signal Monitor", 16, true);
         subtitle.setTextColor(Color.rgb(204, 251, 241));
         hero.addView(title);
         hero.addView(subtitle);
         root.addView(hero);
+
+        topStatusChip = chip("Ready to capture", Color.rgb(219, 234, 254), Color.rgb(30, 64, 175));
+        LinearLayout topStatusBlock = block(Color.WHITE);
+        topStatusBlock.addView(sectionTitle("Quick Status"));
+        topStatusBlock.addView(topStatusChip);
+        root.addView(topStatusBlock);
+
+        LinearLayout tabs = new LinearLayout(this);
+        tabs.setOrientation(LinearLayout.HORIZONTAL);
+        tabs.setPadding(0, 0, 0, dp(2));
+        tabCapture = tabButton("Capture", true);
+        tabStats = tabButton("Stats", false);
+        tabLatestRows = tabButton("History", false);
+        tabs.addView(tabCapture);
+        tabs.addView(tabStats);
+        tabs.addView(tabLatestRows);
+        LinearLayout tabsBlock = block(Color.WHITE);
+        tabsBlock.addView(sectionTitle("Views"));
+        tabsBlock.addView(tabs);
+        root.addView(tabsBlock);
 
         LinearLayout config = block(Color.WHITE);
         config.addView(sectionTitle("Server & Capture"));
@@ -156,18 +216,13 @@ public class MainActivity extends Activity {
         GridLayout controls = new GridLayout(this);
         controls.setColumnCount(2);
         controls.setUseDefaultMargins(true);
-        streamButton = button("Start Streaming");
-        Button onceButton = button("Send One Sample");
-        Button statsButton = button("Load Statistics");
-        Button recentButton = button("Load Latest Rows");
+        streamButton = button("Start Streaming", COLOR_GREEN);
+        onceButton = button("Send One Sample", COLOR_BLUE);
         controls.addView(streamButton);
         controls.addView(onceButton);
-        controls.addView(statsButton);
-        controls.addView(recentButton);
         LinearLayout controlsBlock = block(Color.WHITE);
         controlsBlock.addView(sectionTitle("Controls"));
         controlsBlock.addView(controls);
-        root.addView(controlsBlock);
 
         GridLayout tiles = new GridLayout(this);
         tiles.setColumnCount(2);
@@ -184,26 +239,148 @@ public class MainActivity extends Activity {
         tiles.addView(noiseTile);
         tiles.addView(cellTile);
         tiles.addView(uploadTile);
-        LinearLayout tilesBlock = block(Color.WHITE);
-        tilesBlock.addView(sectionTitle("Live Snapshot"));
-        tilesBlock.addView(tiles);
-        root.addView(tilesBlock);
-
         qualityText = card("Signal Quality", Color.rgb(220, 252, 231));
         statusText = card("Status", Color.WHITE);
         liveText = card("Live Measurement", Color.WHITE);
-        statsText = card("Server Statistics", Color.WHITE);
-        recentText = card("Recent Server Rows", Color.WHITE);
-        root.addView(qualityText);
-        root.addView(statusText);
-        root.addView(liveText);
-        root.addView(statsText);
-        root.addView(recentText);
+        statsText = card("Statistics", Color.WHITE);
+        recentText = card("Server History", Color.WHITE);
+
+        captureSection = new LinearLayout(this);
+        captureSection.setOrientation(LinearLayout.VERTICAL);
+        captureSection.addView(controlsBlock);
+        LinearLayout tilesBlock = block(Color.WHITE);
+        tilesBlock.addView(sectionTitle("Live Snapshot"));
+        tilesBlock.addView(tiles);
+        captureSection.addView(tilesBlock);
+        captureSection.addView(qualityText);
+        captureSection.addView(statusText);
+        captureSection.addView(liveText);
+
+        statsSection = new LinearLayout(this);
+        statsSection.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout statsControlsBlock = block(Color.WHITE);
+        statsControlsBlock.addView(sectionTitle("Statistics Actions"));
+        GridLayout statsControls = new GridLayout(this);
+        statsControls.setColumnCount(2);
+        statsControls.setUseDefaultMargins(true);
+        deviceStatsButton = button("Load This Device Stats", COLOR_TEAL);
+        serverStatsButton = button("Load All Server Stats", COLOR_BLUE);
+        statsControls.addView(deviceStatsButton);
+        statsControls.addView(serverStatsButton);
+        statsControlsBlock.addView(statsControls);
+        statsSection.addView(statsControlsBlock);
+        statsSection.addView(statsText);
+        latestRowsSection = new LinearLayout(this);
+        latestRowsSection.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout historyFiltersBlock = block(Color.WHITE);
+        historyFiltersBlock.addView(sectionTitle("History Filters"));
+        GridLayout historyFiltersGrid = new GridLayout(this);
+        historyFiltersGrid.setColumnCount(2);
+        historyFiltersGrid.setUseDefaultMargins(true);
+        historyFromInput = dateTimeInput("Pick start date & time");
+        historyToInput = dateTimeInput("Pick end date & time");
+        historyDeviceInput = filterInput("Device ID");
+        historyCellInput = filterInput("Cell ID");
+        historyMinPowerInput = filterInput("-100");
+        historyMaxPowerInput = filterInput("-70");
+        historyOperatorSpinner = dropdown(new String[]{"Any", "alfa", "touch"});
+        historyGenerationSpinner = dropdown(new String[]{"Any", "2G", "3G", "4G", "5G"});
+        historyQualitySpinner = dropdown(new String[]{"Any", "Excellent", "Good", "Medium", "Bad", "Very Bad"});
+        historyFiltersGrid.addView(fieldStack("From", historyFromInput));
+        historyFiltersGrid.addView(fieldStack("To", historyToInput));
+        historyFiltersGrid.addView(fieldStack("Device ID", historyDeviceInput));
+        historyFiltersGrid.addView(fieldStack("Cell ID", historyCellInput));
+        historyFiltersGrid.addView(fieldStack("Min Power", historyMinPowerInput));
+        historyFiltersGrid.addView(fieldStack("Max Power", historyMaxPowerInput));
+        historyFiltersGrid.addView(fieldStack("Operator", historyOperatorSpinner));
+        historyFiltersGrid.addView(fieldStack("Generation", historyGenerationSpinner));
+        historyFiltersGrid.addView(fieldStack("Signal Tier", historyQualitySpinner));
+        historyFiltersBlock.addView(historyFiltersGrid);
+        GridLayout historyPresetsGrid = new GridLayout(this);
+        historyPresetsGrid.setColumnCount(2);
+        historyPresetsGrid.setUseDefaultMargins(true);
+        historyLast10MinButton = button("Last 10 Min", COLOR_TEAL);
+        historyLastHourButton = button("Last Hour", COLOR_BLUE);
+        historyTodayButton = button("Today", COLOR_GREEN);
+        historyCustomRangeButton = button("Custom Range", COLOR_ORANGE);
+        historyPresetsGrid.addView(historyLast10MinButton);
+        historyPresetsGrid.addView(historyLastHourButton);
+        historyPresetsGrid.addView(historyTodayButton);
+        historyPresetsGrid.addView(historyCustomRangeButton);
+        historyFiltersBlock.addView(label("Quick Time Range"));
+        historyFiltersBlock.addView(historyPresetsGrid);
+        LinearLayout latestRowsControlsBlock = block(Color.WHITE);
+        latestRowsControlsBlock.addView(sectionTitle("History Actions"));
+        GridLayout latestRowsActions = new GridLayout(this);
+        latestRowsActions.setColumnCount(2);
+        latestRowsActions.setUseDefaultMargins(true);
+        latestRowsButton = button("Load History", COLOR_ORANGE);
+        clearHistoryFiltersButton = button("Clear Filters", COLOR_BLUE);
+        latestRowsActions.addView(latestRowsButton);
+        latestRowsActions.addView(clearHistoryFiltersButton);
+        latestRowsControlsBlock.addView(latestRowsActions);
+        latestRowsSection.addView(historyFiltersBlock);
+        latestRowsSection.addView(latestRowsControlsBlock);
+        latestRowsSection.addView(recentText);
+
+        root.addView(captureSection);
+        root.addView(statsSection);
+        root.addView(latestRowsSection);
 
         streamButton.setOnClickListener(v -> toggleStreaming());
         onceButton.setOnClickListener(v -> captureAndSend());
-        statsButton.setOnClickListener(v -> loadStats());
-        recentButton.setOnClickListener(v -> loadRecentRows());
+        deviceStatsButton.setOnClickListener(v -> {
+            switchTab("stats");
+            pulseButton(deviceStatsButton);
+            loadDeviceStats();
+        });
+        serverStatsButton.setOnClickListener(v -> {
+            switchTab("stats");
+            pulseButton(serverStatsButton);
+            loadServerStats();
+        });
+        latestRowsButton.setOnClickListener(v -> {
+            switchTab("latest");
+            pulseButton(latestRowsButton);
+            loadRecentRows();
+        });
+        clearHistoryFiltersButton.setOnClickListener(v -> {
+            clearHistoryFilters();
+            pulseButton(clearHistoryFiltersButton);
+            setTopStatus("History filters cleared", Color.rgb(219, 234, 254), Color.rgb(30, 64, 175));
+            loadRecentRows();
+        });
+        historyLast10MinButton.setOnClickListener(v -> {
+            applyHistoryPresetMinutes(10);
+            pulseButton(historyLast10MinButton);
+        });
+        historyLastHourButton.setOnClickListener(v -> {
+            applyHistoryPresetMinutes(60);
+            pulseButton(historyLastHourButton);
+        });
+        historyTodayButton.setOnClickListener(v -> {
+            applyHistoryToday();
+            pulseButton(historyTodayButton);
+        });
+        historyCustomRangeButton.setOnClickListener(v -> {
+            pulseButton(historyCustomRangeButton);
+            showDateTimePicker(historyFromInput);
+        });
+        tabCapture.setOnClickListener(v -> switchTab("capture"));
+        tabStats.setOnClickListener(v -> switchTab("stats"));
+        tabLatestRows.setOnClickListener(v -> switchTab("latest"));
+        attachTouchFeedback(streamButton);
+        attachTouchFeedback(onceButton);
+        attachTouchFeedback(deviceStatsButton);
+        attachTouchFeedback(serverStatsButton);
+        attachTouchFeedback(latestRowsButton);
+        attachTouchFeedback(clearHistoryFiltersButton);
+        attachTouchFeedback(historyLast10MinButton);
+        attachTouchFeedback(historyLastHourButton);
+        attachTouchFeedback(historyTodayButton);
+        attachTouchFeedback(historyCustomRangeButton);
+        switchTab("capture");
+        updateStreamingButton();
 
         return scrollView;
     }
@@ -268,14 +445,80 @@ public class MainActivity extends Activity {
         return view;
     }
 
-    private Button button(String value) {
+    private TextView chip(String value, int background, int textColor) {
+        TextView view = text(value, 15, true);
+        view.setTextColor(textColor);
+        view.setGravity(Gravity.CENTER);
+        view.setPadding(dp(14), dp(10), dp(14), dp(10));
+        view.setBackground(rounded(background, dp(24)));
+        return view;
+    }
+
+    private TextView tabButton(String value, boolean active) {
+        TextView view = text(value, 15, true);
+        view.setGravity(Gravity.CENTER);
+        view.setPadding(dp(16), dp(12), dp(16), dp(12));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        params.setMargins(0, 0, dp(8), 0);
+        view.setLayoutParams(params);
+        view.setClickable(true);
+        view.setFocusable(true);
+        setTabState(view, active);
+        return view;
+    }
+
+    private Button button(String value, int color) {
         Button button = new Button(this);
         button.setText(value);
         button.setAllCaps(false);
         button.setTextColor(Color.WHITE);
-        button.setBackground(rounded(Color.rgb(15, 118, 110), dp(8)));
+        button.setBackground(rounded(color, dp(8)));
         button.setMinHeight(dp(46));
         return button;
+    }
+
+    private EditText filterInput(String hint) {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setHint(hint);
+        input.setTextColor(COLOR_TEXT_DARK);
+        input.setHintTextColor(Color.rgb(100, 115, 131));
+        input.setBackground(rounded(Color.WHITE, dp(8)));
+        input.setPadding(dp(12), dp(10), dp(12), dp(10));
+        return input;
+    }
+
+    private EditText dateTimeInput(String hint) {
+        EditText input = filterInput(hint);
+        input.setFocusable(false);
+        input.setClickable(true);
+        input.setInputType(InputType.TYPE_NULL);
+        input.setOnClickListener(v -> showDateTimePicker(input));
+        return input;
+    }
+
+    private Spinner dropdown(String[] values) {
+        Spinner spinner = new Spinner(this);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, values);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+        spinner.setBackground(rounded(Color.WHITE, dp(8)));
+        spinner.setPadding(dp(8), dp(8), dp(8), dp(8));
+        return spinner;
+    }
+
+    private LinearLayout fieldStack(String title, View content) {
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.addView(label(title));
+        layout.addView(content);
+        GridLayout.LayoutParams params = new GridLayout.LayoutParams();
+        params.width = 0;
+        params.height = GridLayout.LayoutParams.WRAP_CONTENT;
+        params.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
+        params.setMargins(dp(4), dp(4), dp(4), dp(4));
+        layout.setLayoutParams(params);
+        return layout;
     }
 
     private TextView card(String title, int background) {
@@ -302,8 +545,9 @@ public class MainActivity extends Activity {
 
     private void toggleStreaming() {
         streaming = !streaming;
-        streamButton.setText(streaming ? "Stop Streaming" : "Start Streaming");
         preferences.edit().putString("serverUrl", normalizedServer()).apply();
+        updateStreamingButton();
+        pulseButton(streamButton);
         if (streaming) {
             updateStatus("Streaming started. Next samples will be sent every 10 seconds.");
             captureAndSend();
@@ -315,6 +559,7 @@ public class MainActivity extends Activity {
     }
 
     private void captureAndSend() {
+        pulseButton(onceButton);
         Measurement measurement = demoMode.isChecked() ? demoMeasurement() : collectMeasurement();
         renderLive(measurement);
         if (!isAllowedOperator(measurement.operator)) {
@@ -336,27 +581,26 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void loadStats() {
+    private void loadDeviceStats() {
+        executor.execute(() -> {
+            try {
+                JSONObject stats = request("GET", "/api/stats/summary?deviceId=" + deviceId, null);
+                setText(statsText, formatStatsSummary(stats, "This Device Statistics", true));
+                setTopStatus("This device statistics refreshed", Color.rgb(219, 234, 254), Color.rgb(30, 64, 175));
+            } catch (Exception error) {
+                updateStatus("Device stats failed: " + error.getMessage());
+            }
+        });
+    }
+
+    private void loadServerStats() {
         executor.execute(() -> {
             try {
                 JSONObject stats = request("GET", "/api/stats/summary", null);
-                StringBuilder builder = new StringBuilder();
-                builder.append("Server Statistics\n");
-                builder.append("Samples: ").append(stats.optInt("totalSamples")).append("\n");
-                JSONObject overall = stats.optJSONObject("overall");
-                if (overall != null) {
-                    double avgPower = overall.optDouble("averagePowerDbm", Double.NaN);
-                    builder.append("Average power: ").append(overall.optString("averagePowerDbm", "N/A"))
-                            .append(" dBm (").append(signalTier(avgPower)).append(")\n");
-                    builder.append("Average SNR: ").append(overall.optString("averageSnrDb", "N/A")).append(" dB\n");
-                    builder.append("Distinct devices: ").append(overall.optInt("distinctDevices")).append("\n");
-                    builder.append("Distinct cells: ").append(overall.optInt("distinctCells")).append("\n");
-                }
-                builder.append("\nOperator ratios:\n").append(formatRatios(stats.optJSONObject("operatorRatios")));
-                builder.append("\nNetwork ratios:\n").append(formatRatios(stats.optJSONObject("networkRatios")));
-                setText(statsText, builder.toString());
+                setText(statsText, formatStatsSummary(stats, "All Server Statistics", false));
+                setTopStatus("Server statistics refreshed", Color.rgb(219, 234, 254), Color.rgb(30, 64, 175));
             } catch (Exception error) {
-                updateStatus("Stats failed: " + error.getMessage());
+                updateStatus("Server stats failed: " + error.getMessage());
             }
         });
     }
@@ -364,9 +608,18 @@ public class MainActivity extends Activity {
     private void loadRecentRows() {
         executor.execute(() -> {
             try {
-                JSONObject response = request("GET", "/api/measurements?limit=10", null);
-                JSONArray rows = response.getJSONArray("rows");
-                StringBuilder builder = new StringBuilder("Recent Server Rows\n");
+                JSONObject response = request("GET", buildHistoryPath(), null);
+                JSONArray rows = applyHistoryQualityFilter(response.getJSONArray("rows"));
+                StringBuilder builder = new StringBuilder("Server History\n");
+                builder.append("Rows returned: ").append(rows.length()).append("\n");
+                if (!hasHistoryFilters() && historyQualityTier().isEmpty()) {
+                    builder.append("Showing latest 10 rows.\n\n");
+                } else {
+                    builder.append("Showing rows matching current filters.\n\n");
+                }
+                if (rows.length() == 0) {
+                    builder.append("No server entries matched the history filters.\n");
+                }
                 for (int i = 0; i < rows.length(); i++) {
                     JSONObject row = rows.getJSONObject(i);
                     builder.append(row.optString("client_timestamp")).append(" | ")
@@ -378,8 +631,9 @@ public class MainActivity extends Activity {
                             .append(row.optString("cell_id", "N/A")).append("\n");
                 }
                 setText(recentText, builder.toString());
+                setTopStatus("History loaded", Color.rgb(254, 243, 199), Color.rgb(146, 64, 14));
             } catch (Exception error) {
-                updateStatus("Latest rows failed: " + error.getMessage());
+                updateStatus("History failed: " + error.getMessage());
             }
         });
     }
@@ -398,6 +652,41 @@ public class MainActivity extends Activity {
                         .append(item.optDouble("percentage")).append("%\n");
             }
         }
+        return builder.toString();
+    }
+
+    private String formatStatsSummary(JSONObject stats, String title, boolean deviceScoped) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(title).append("\n");
+        int totalSamples = stats.optInt("totalSamples");
+        builder.append("Samples: ").append(totalSamples).append("\n");
+
+        if (deviceScoped && totalSamples == 0) {
+            builder.append("No samples from this device have reached the server yet.\n");
+            builder.append("Try sending one sample or start streaming, then reload this section.\n");
+            return builder.toString();
+        }
+
+        JSONObject overall = stats.optJSONObject("overall");
+        if (overall != null) {
+            double avgPower = overall.optDouble("averagePowerDbm", Double.NaN);
+            builder.append("Average power: ").append(overall.optString("averagePowerDbm", "N/A"))
+                    .append(" dBm (").append(signalTier(avgPower)).append(")\n");
+            builder.append("Average SNR: ").append(overall.optString("averageSnrDb", "N/A")).append(" dB\n");
+            builder.append("Average SINR: ").append(overall.optString("averageSinrDb", "N/A")).append(" dB\n");
+            if (!deviceScoped) {
+                builder.append("Distinct devices: ").append(overall.optInt("distinctDevices")).append("\n");
+            }
+            builder.append("Distinct cells: ").append(overall.optInt("distinctCells")).append("\n");
+        }
+
+        if (deviceScoped) {
+            builder.append("Device ID: ").append(deviceId).append("\n");
+            builder.append("Current session: ").append(sessionId.substring(0, 8)).append("\n");
+        }
+
+        builder.append("\nOperator ratios:\n").append(formatRatios(stats.optJSONObject("operatorRatios")));
+        builder.append("\nNetwork ratios:\n").append(formatRatios(stats.optJSONObject("networkRatios")));
         return builder.toString();
     }
 
@@ -653,6 +942,16 @@ public class MainActivity extends Activity {
 
     private void updateStatus(String message) {
         setText(statusText, "Status\n" + message);
+        String lower = message.toLowerCase(Locale.US);
+        if (lower.contains("failed")) {
+            setTopStatus(message, Color.rgb(254, 226, 226), Color.rgb(153, 27, 27));
+        } else if (lower.contains("stopped")) {
+            setTopStatus(message, Color.rgb(255, 237, 213), Color.rgb(154, 52, 18));
+        } else if (lower.contains("started") || lower.contains("uploaded") || lower.contains("loaded") || lower.contains("streaming")) {
+            setTopStatus(message, Color.rgb(220, 252, 231), Color.rgb(22, 101, 52));
+        } else {
+            setTopStatus(message, Color.rgb(219, 234, 254), Color.rgb(30, 64, 175));
+        }
         if (uploadTile != null) {
             setTile(
                     uploadTile,
@@ -679,11 +978,223 @@ public class MainActivity extends Activity {
         if (lower.contains("skipped sample")) return "Skipped sample";
         if (lower.contains("streaming started")) return "Streaming";
         if (lower.contains("streaming stopped")) return "Stopped";
+        if (lower.contains("history")) return "History";
         return "Ready";
+    }
+
+    private void clearHistoryFilters() {
+        setEditText(historyFromInput, "");
+        setEditText(historyToInput, "");
+        setEditText(historyDeviceInput, "");
+        setEditText(historyCellInput, "");
+        setEditText(historyMinPowerInput, "");
+        setEditText(historyMaxPowerInput, "");
+        setSpinner(historyOperatorSpinner, 0);
+        setSpinner(historyGenerationSpinner, 0);
+        setSpinner(historyQualitySpinner, 0);
+    }
+
+    private void applyHistoryPresetMinutes(int minutes) {
+        Calendar end = Calendar.getInstance();
+        Calendar start = (Calendar) end.clone();
+        start.add(Calendar.MINUTE, -minutes);
+        setEditText(historyFromInput, isoTimestamp(start));
+        setEditText(historyToInput, isoTimestamp(end));
+        setTopStatus("History preset applied", Color.rgb(219, 234, 254), Color.rgb(30, 64, 175));
+        loadRecentRows();
+    }
+
+    private void applyHistoryToday() {
+        Calendar start = Calendar.getInstance();
+        start.set(Calendar.HOUR_OF_DAY, 0);
+        start.set(Calendar.MINUTE, 0);
+        start.set(Calendar.SECOND, 0);
+        start.set(Calendar.MILLISECOND, 0);
+        Calendar end = Calendar.getInstance();
+        setEditText(historyFromInput, isoTimestamp(start));
+        setEditText(historyToInput, isoTimestamp(end));
+        setTopStatus("Today preset applied", Color.rgb(219, 234, 254), Color.rgb(30, 64, 175));
+        loadRecentRows();
+    }
+
+    private String isoTimestamp(Calendar calendar) {
+        return new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(calendar.getTime());
+    }
+
+    private String buildHistoryPath() throws Exception {
+        StringBuilder path = new StringBuilder("/api/measurements?");
+        if (!hasHistoryFilters() && historyQualityTier().isEmpty()) {
+            path.append("limit=10");
+            return path.toString();
+        }
+        appendQuery(path, "all", "true");
+        appendQuery(path, "from", textValue(historyFromInput));
+        appendQuery(path, "to", textValue(historyToInput));
+        appendQuery(path, "deviceId", textValue(historyDeviceInput));
+        appendQuery(path, "cellId", textValue(historyCellInput));
+        appendQuery(path, "minPower", textValue(historyMinPowerInput));
+        appendQuery(path, "maxPower", textValue(historyMaxPowerInput));
+        appendQuery(path, "operator", spinnerValue(historyOperatorSpinner));
+        appendQuery(path, "networkGeneration", spinnerValue(historyGenerationSpinner));
+        return path.toString();
+    }
+
+    private void appendQuery(StringBuilder builder, String key, String value) throws Exception {
+        if (value == null || value.trim().isEmpty()) return;
+        if (builder.charAt(builder.length() - 1) != '?') builder.append('&');
+        builder.append(key).append('=').append(URLEncoder.encode(value.trim(), "UTF-8"));
+    }
+
+    private boolean hasHistoryFilters() {
+        return !textValue(historyFromInput).isEmpty()
+                || !textValue(historyToInput).isEmpty()
+                || !textValue(historyDeviceInput).isEmpty()
+                || !textValue(historyCellInput).isEmpty()
+                || !textValue(historyMinPowerInput).isEmpty()
+                || !textValue(historyMaxPowerInput).isEmpty()
+                || !spinnerValue(historyOperatorSpinner).isEmpty()
+                || !spinnerValue(historyGenerationSpinner).isEmpty();
+    }
+
+    private String historyQualityTier() {
+        return spinnerValue(historyQualitySpinner).toLowerCase(Locale.US);
+    }
+
+    private JSONArray applyHistoryQualityFilter(JSONArray rows) throws Exception {
+        String quality = historyQualityTier();
+        if (quality.isEmpty()) return rows;
+        JSONArray filtered = new JSONArray();
+        for (int i = 0; i < rows.length(); i++) {
+            JSONObject row = rows.getJSONObject(i);
+            String tier = signalTier(row.optDouble("signal_power_dbm", Double.NaN)).toLowerCase(Locale.US);
+            if (tier.equals(quality)) filtered.put(row);
+        }
+        return filtered;
+    }
+
+    private String textValue(EditText input) {
+        return input == null ? "" : input.getText().toString().trim();
+    }
+
+    private String spinnerValue(Spinner spinner) {
+        if (spinner == null || spinner.getSelectedItem() == null) return "";
+        String value = String.valueOf(spinner.getSelectedItem()).trim();
+        return "Any".equalsIgnoreCase(value) ? "" : value;
     }
 
     private void setText(TextView view, String message) {
         handler.post(() -> view.setText(message));
+    }
+
+    private void setEditText(EditText input, String value) {
+        if (input == null) return;
+        handler.post(() -> input.setText(value));
+    }
+
+    private void setSpinner(Spinner spinner, int index) {
+        if (spinner == null) return;
+        handler.post(() -> spinner.setSelection(index));
+    }
+
+    private void setTopStatus(String message, int background, int textColor) {
+        if (topStatusChip == null) return;
+        handler.post(() -> {
+            topStatusChip.setText(message);
+            topStatusChip.setTextColor(textColor);
+            topStatusChip.setBackground(rounded(background, dp(24)));
+            topStatusChip.animate().cancel();
+            topStatusChip.setScaleX(1f);
+            topStatusChip.setScaleY(1f);
+            topStatusChip.animate().scaleX(1.02f).scaleY(1.02f).setDuration(120).withEndAction(() ->
+                    topStatusChip.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+            ).start();
+        });
+    }
+
+    private void showDateTimePicker(EditText target) {
+        Calendar calendar = Calendar.getInstance();
+        DatePickerDialog dateDialog = new DatePickerDialog(
+                this,
+                (view, year, month, dayOfMonth) -> {
+                    TimePickerDialog timeDialog = new TimePickerDialog(
+                            this,
+                            (timeView, hourOfDay, minute) -> {
+                                Calendar picked = Calendar.getInstance();
+                                picked.set(Calendar.YEAR, year);
+                                picked.set(Calendar.MONTH, month);
+                                picked.set(Calendar.DAY_OF_MONTH, dayOfMonth);
+                                picked.set(Calendar.HOUR_OF_DAY, hourOfDay);
+                                picked.set(Calendar.MINUTE, minute);
+                                picked.set(Calendar.SECOND, 0);
+                                picked.set(Calendar.MILLISECOND, 0);
+                                SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
+                                target.setText(format.format(picked.getTime()));
+                            },
+                            calendar.get(Calendar.HOUR_OF_DAY),
+                            calendar.get(Calendar.MINUTE),
+                            true
+                    );
+                    timeDialog.show();
+                },
+                calendar.get(Calendar.YEAR),
+                calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH)
+        );
+        dateDialog.show();
+    }
+
+    private void switchTab(String tab) {
+        currentTab = tab;
+        boolean showCapture = "capture".equals(tab);
+        boolean showStats = "stats".equals(tab);
+        boolean showLatest = "latest".equals(tab);
+        if (captureSection != null) captureSection.setVisibility(showCapture ? View.VISIBLE : View.GONE);
+        if (statsSection != null) statsSection.setVisibility(showStats ? View.VISIBLE : View.GONE);
+        if (latestRowsSection != null) latestRowsSection.setVisibility(showLatest ? View.VISIBLE : View.GONE);
+        if (tabCapture != null) setTabState(tabCapture, showCapture);
+        if (tabStats != null) setTabState(tabStats, showStats);
+        if (tabLatestRows != null) setTabState(tabLatestRows, showLatest);
+        if (showLatest) {
+            loadRecentRows();
+        }
+        String readyMessage = showCapture ? "Capture tab ready" : showStats ? "Statistics tab ready" : "History tab ready";
+        setTopStatus(readyMessage, Color.rgb(219, 234, 254), Color.rgb(30, 64, 175));
+    }
+
+    private void setTabState(TextView tab, boolean active) {
+        tab.setTextColor(active ? Color.WHITE : COLOR_TEAL);
+        tab.setBackground(rounded(active ? COLOR_TEAL : Color.rgb(240, 249, 255), dp(18)));
+        tab.setScaleX(active ? 1f : 0.98f);
+        tab.setScaleY(active ? 1f : 0.98f);
+    }
+
+    private void updateStreamingButton() {
+        if (streamButton == null) return;
+        streamButton.setText(streaming ? "Stop Streaming" : "Start Streaming");
+        streamButton.setBackground(rounded(streaming ? COLOR_RED : COLOR_GREEN, dp(8)));
+    }
+
+    private void pulseButton(View view) {
+        if (view == null) return;
+        handler.post(() -> {
+            view.animate().cancel();
+            view.setScaleX(1f);
+            view.setScaleY(1f);
+            view.animate().scaleX(1.04f).scaleY(1.04f).setDuration(110).withEndAction(() ->
+                    view.animate().scaleX(1f).scaleY(1f).setDuration(110).start()
+            ).start();
+        });
+    }
+
+    private void attachTouchFeedback(View view) {
+        view.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                v.animate().scaleX(0.97f).scaleY(0.97f).setDuration(80).start();
+            } else if (event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
+                v.animate().scaleX(1f).scaleY(1f).setDuration(80).start();
+            }
+            return false;
+        });
     }
 
     private void requestPermissionsIfNeeded() {

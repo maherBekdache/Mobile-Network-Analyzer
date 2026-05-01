@@ -43,7 +43,25 @@ Install the debug APK on a phone. Enter:
 http://<laptop-ip>:8080
 ```
 
-Enable demo mode if live SIM data is unavailable, then tap `Start Streaming`.
+If using the Android Studio emulator, use:
+
+```text
+http://10.0.2.2:8080
+```
+
+Suggested Android demo flow:
+
+1. `Capture` tab
+   - enter the backend URL
+   - enable demo mode if live SIM data is unavailable
+   - tap `Start Streaming`
+2. `Stats` tab
+   - tap `Load This Device Stats`
+   - tap `Load All Server Stats`
+3. `History` tab
+   - show the latest 10 rows loading by default
+   - apply a quick preset like `Last 10 Min`
+   - optionally filter by operator, generation, power range, device ID, cell ID, or signal tier
 
 ## 5. Show Required Features
 
@@ -55,5 +73,6 @@ Enable demo mode if live SIM data is unavailable, then tap `Start Streaming`.
 - Signal power timeline.
 - Latest samples table.
 - Device table with active status and per-device average power.
-- Android `Load Statistics` button requesting server-calculated stats.
+- Android device-only stats and all-server stats requesting server-calculated analytics.
+- Android `History` tab with default latest rows and filterable server history.
 - Dashboard filters for date, operator, generation, power, cell ID, and device ID.

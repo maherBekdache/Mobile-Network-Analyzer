@@ -234,16 +234,6 @@ function App() {
     ];
   }, [operatorQualityData]);
 
-  const devicePowerData = useMemo(() => {
-    return [...deviceStats]
-      .slice(0, 10)
-      .sort((a, b) => (b.averagePowerDbm ?? -999) - (a.averagePowerDbm ?? -999))
-      .map((row) => ({
-        deviceId: row.deviceId,
-        averagePowerDbm: row.averagePowerDbm
-      }));
-  }, [deviceStats]);
-
   const timeline = [...measurements]
     .reverse()
     .slice(-60)
@@ -291,6 +281,29 @@ function App() {
           </ResponsiveContainer>
         </ChartPanel>
 
+        <ChartPanel title="Generation Ratios" icon={Filter}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={generationData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#d9e2ea" />
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip formatter={(value, name, item) => [`${value} samples (${item.payload.percentage}%)`, name]} />
+              <Bar dataKey="value" fill="#6366f1" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartPanel>
+
+        <ChartPanel title="Operator Distribution" icon={BarChart3}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie dataKey="value" data={operatorData} nameKey="name" innerRadius={54} outerRadius={88} paddingAngle={4}>
+                {operatorData.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
+              </Pie>
+              <Tooltip formatter={(value, name, item) => [`${value} samples (${item.payload.percentage}%)`, name]} />
+            </PieChart>
+          </ResponsiveContainer>
+        </ChartPanel>
+
         <ChartPanel title="Alfa vs Touch Signal Quality" icon={SignalHigh}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={providerComparisonData}>
@@ -307,44 +320,6 @@ function App() {
           </ResponsiveContainer>
         </ChartPanel>
 
-        <ChartPanel title="Operator Distribution" icon={BarChart3}>
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie dataKey="value" data={operatorData} nameKey="name" innerRadius={54} outerRadius={88} paddingAngle={4}>
-                {operatorData.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
-              </Pie>
-              <Tooltip formatter={(value, name, item) => [`${value} samples (${item.payload.percentage}%)`, name]} />
-            </PieChart>
-          </ResponsiveContainer>
-        </ChartPanel>
-
-        <ChartPanel title="Generation Ratios" icon={Filter}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={generationData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#d9e2ea" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip formatter={(value, name, item) => [`${value} samples (${item.payload.percentage}%)`, name]} />
-              <Bar dataKey="value" fill="#6366f1" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartPanel>
-
-        <ChartPanel title="Average Power By User" icon={Smartphone}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={devicePowerData}
-              layout="vertical"
-              margin={{ top: 6, right: 12, left: 18, bottom: 6 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#d9e2ea" />
-              <XAxis type="number" />
-              <YAxis type="category" dataKey="deviceId" width={90} />
-              <Tooltip />
-              <Bar dataKey="averagePowerDbm" fill="#14b8a6" radius={[0, 6, 6, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartPanel>
       </section>
 
       <section className="tables">
@@ -413,31 +388,47 @@ function App() {
         </header>
         <p className="recordings-copy">Filter by date interval, user, provider, network type, cell, and signal range.</p>
         <section className="toolbar recordings-toolbar">
-          <label>
-            <Clock3 size={16} />
-            <input type="datetime-local" value={filters.from} onChange={(event) => setFilters({ ...filters, from: event.target.value })} />
-          </label>
-          <label>
-            <Clock3 size={16} />
-            <input type="datetime-local" value={filters.to} onChange={(event) => setFilters({ ...filters, to: event.target.value })} />
-          </label>
-          <select value={filters.operator} onChange={(event) => setFilters({ ...filters, operator: event.target.value })}>
-            <option value="">All providers</option>
-            <option value="alfa">Alfa</option>
-            <option value="touch">Touch</option>
-          </select>
-          <select value={filters.networkGeneration} onChange={(event) => setFilters({ ...filters, networkGeneration: event.target.value })}>
-            <option value="">All generations</option>
-            <option value="2G">2G</option>
-            <option value="3G">3G</option>
-            <option value="4G">4G</option>
-            <option value="5G">5G</option>
-          </select>
-          <input placeholder="User / Device ID" value={filters.deviceId} onChange={(event) => setFilters({ ...filters, deviceId: event.target.value })} />
-          <input placeholder="Cell ID" value={filters.cellId} onChange={(event) => setFilters({ ...filters, cellId: event.target.value })} />
-          <input placeholder="Min dBm" value={filters.minPower} onChange={(event) => setFilters({ ...filters, minPower: event.target.value })} />
-          <input placeholder="Max dBm" value={filters.maxPower} onChange={(event) => setFilters({ ...filters, maxPower: event.target.value })} />
-          <button onClick={() => loadAllMeasurements().catch((error) => setStatus(error.message))}>
+          <FilterField label="From">
+            <div className="input-with-icon">
+              <Clock3 size={16} />
+              <input type="datetime-local" value={filters.from} onChange={(event) => setFilters({ ...filters, from: event.target.value })} />
+            </div>
+          </FilterField>
+          <FilterField label="To">
+            <div className="input-with-icon">
+              <Clock3 size={16} />
+              <input type="datetime-local" value={filters.to} onChange={(event) => setFilters({ ...filters, to: event.target.value })} />
+            </div>
+          </FilterField>
+          <FilterField label="Provider">
+            <select value={filters.operator} onChange={(event) => setFilters({ ...filters, operator: event.target.value })}>
+              <option value="">All providers</option>
+              <option value="alfa">Alfa</option>
+              <option value="touch">Touch</option>
+            </select>
+          </FilterField>
+          <FilterField label="Generation">
+            <select value={filters.networkGeneration} onChange={(event) => setFilters({ ...filters, networkGeneration: event.target.value })}>
+              <option value="">All generations</option>
+              <option value="2G">2G</option>
+              <option value="3G">3G</option>
+              <option value="4G">4G</option>
+              <option value="5G">5G</option>
+            </select>
+          </FilterField>
+          <FilterField label="User / Device">
+            <input placeholder="User / Device ID" value={filters.deviceId} onChange={(event) => setFilters({ ...filters, deviceId: event.target.value })} />
+          </FilterField>
+          <FilterField label="Cell">
+            <input placeholder="Cell ID" value={filters.cellId} onChange={(event) => setFilters({ ...filters, cellId: event.target.value })} />
+          </FilterField>
+          <FilterField label="Min Power">
+            <input placeholder="Min dBm" value={filters.minPower} onChange={(event) => setFilters({ ...filters, minPower: event.target.value })} />
+          </FilterField>
+          <FilterField label="Max Power">
+            <input placeholder="Max dBm" value={filters.maxPower} onChange={(event) => setFilters({ ...filters, maxPower: event.target.value })} />
+          </FilterField>
+          <button className="primary-button emphasis-button" onClick={() => loadAllMeasurements().catch((error) => setStatus(error.message))}>
             <Filter size={16} />
             Apply Filters
           </button>
@@ -497,39 +488,64 @@ function App() {
       </section>
 
       <section className="toolbar">
-        <label>
-          <Clock3 size={16} />
-          <input type="datetime-local" value={filters.from} onChange={(event) => setFilters({ ...filters, from: event.target.value })} />
-        </label>
-        <label>
-          <Clock3 size={16} />
-          <input type="datetime-local" value={filters.to} onChange={(event) => setFilters({ ...filters, to: event.target.value })} />
-        </label>
-        <select value={filters.operator} onChange={(event) => setFilters({ ...filters, operator: event.target.value })}>
-          <option value="">All operators</option>
-          <option value="alfa">Alfa</option>
-          <option value="touch">Touch</option>
-          <option value="unknown">Unknown</option>
-        </select>
-        <select value={filters.networkGeneration} onChange={(event) => setFilters({ ...filters, networkGeneration: event.target.value })}>
-          <option value="">All generations</option>
-          <option value="2G">2G</option>
-          <option value="3G">3G</option>
-          <option value="4G">4G</option>
-          <option value="5G">5G</option>
-          <option value="unknown">Unknown</option>
-        </select>
-        <input placeholder="Min dBm" value={filters.minPower} onChange={(event) => setFilters({ ...filters, minPower: event.target.value })} />
-        <input placeholder="Max dBm" value={filters.maxPower} onChange={(event) => setFilters({ ...filters, maxPower: event.target.value })} />
-        <input placeholder="Cell ID" value={filters.cellId} onChange={(event) => setFilters({ ...filters, cellId: event.target.value })} />
-        <input placeholder="Device ID" value={filters.deviceId} onChange={(event) => setFilters({ ...filters, deviceId: event.target.value })} />
-        <button onClick={() => load().catch((error) => setStatus(error.message))}>
+        <FilterField label="From">
+          <div className="input-with-icon">
+            <Clock3 size={16} />
+            <input type="datetime-local" value={filters.from} onChange={(event) => setFilters({ ...filters, from: event.target.value })} />
+          </div>
+        </FilterField>
+        <FilterField label="To">
+          <div className="input-with-icon">
+            <Clock3 size={16} />
+            <input type="datetime-local" value={filters.to} onChange={(event) => setFilters({ ...filters, to: event.target.value })} />
+          </div>
+        </FilterField>
+        <FilterField label="Operator">
+          <select value={filters.operator} onChange={(event) => setFilters({ ...filters, operator: event.target.value })}>
+            <option value="">All operators</option>
+            <option value="alfa">Alfa</option>
+            <option value="touch">Touch</option>
+            <option value="unknown">Unknown</option>
+          </select>
+        </FilterField>
+        <FilterField label="Generation">
+          <select value={filters.networkGeneration} onChange={(event) => setFilters({ ...filters, networkGeneration: event.target.value })}>
+            <option value="">All generations</option>
+            <option value="2G">2G</option>
+            <option value="3G">3G</option>
+            <option value="4G">4G</option>
+            <option value="5G">5G</option>
+            <option value="unknown">Unknown</option>
+          </select>
+        </FilterField>
+        <FilterField label="Min Power">
+          <input placeholder="Min dBm" value={filters.minPower} onChange={(event) => setFilters({ ...filters, minPower: event.target.value })} />
+        </FilterField>
+        <FilterField label="Max Power">
+          <input placeholder="Max dBm" value={filters.maxPower} onChange={(event) => setFilters({ ...filters, maxPower: event.target.value })} />
+        </FilterField>
+        <FilterField label="Cell ID">
+          <input placeholder="Cell ID" value={filters.cellId} onChange={(event) => setFilters({ ...filters, cellId: event.target.value })} />
+        </FilterField>
+        <FilterField label="Device ID">
+          <input placeholder="Device ID" value={filters.deviceId} onChange={(event) => setFilters({ ...filters, deviceId: event.target.value })} />
+        </FilterField>
+        <button className="primary-button emphasis-button centered-action" onClick={() => load().catch((error) => setStatus(error.message))}>
           <RefreshCw size={16} />
           Refresh
         </button>
       </section>
       {content}
     </main>
+  );
+}
+
+function FilterField({ label, children }) {
+  return (
+    <div className="filter-field">
+      <span className="filter-label">{label}</span>
+      {children}
+    </div>
   );
 }
 
